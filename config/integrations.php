@@ -1,9 +1,9 @@
 <?php
 
 return [
-    'freshdesk' => [
-        'api_key' => env('FRESHDESK_API_KEY'),
-        'domain' => env('FRESHDESK_DOMAIN'),
+    'cmp' => [
+        'base_url' => env('CMP_BASE_URL'),
+        'api_key'  => env('CMP_API_KEY'),
     ],
 
     'fireflies' => [

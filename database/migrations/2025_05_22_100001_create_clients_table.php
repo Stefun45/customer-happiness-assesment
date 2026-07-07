@@ -14,7 +14,7 @@ return new class extends Migration
             $table->string('email');
             $table->string('phone')->nullable();
             $table->string('company_name');
-            $table->string('freshdesk_company_id')->nullable();
+            $table->string('cmp_id')->nullable()->unique();
             $table->string('freeagent_contact_id')->nullable();
             $table->string('onboarding_helpdesk_id')->nullable();
             $table->boolean('is_new_customer')->default(false);
