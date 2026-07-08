@@ -8,12 +8,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Client extends Model
 {
+    public $incrementing = false;
+
     protected $fillable = [
+        'id',
         'name',
         'email',
         'phone',
         'company_name',
-        'cmp_id',
         'freeagent_contact_id',
         'onboarding_helpdesk_id',
         'is_new_customer',

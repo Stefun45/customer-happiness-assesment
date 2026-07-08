@@ -9,12 +9,11 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('clients', function (Blueprint $table) {
-            $table->id();
+            $table->unsignedBigInteger('id')->primary(); // CMP company id — not auto-incremented
             $table->string('name');
-            $table->string('email');
+            $table->string('email')->nullable();
             $table->string('phone')->nullable();
             $table->string('company_name');
-            $table->string('cmp_id')->nullable()->unique();
             $table->string('freeagent_contact_id')->nullable();
             $table->string('onboarding_helpdesk_id')->nullable();
             $table->boolean('is_new_customer')->default(false);

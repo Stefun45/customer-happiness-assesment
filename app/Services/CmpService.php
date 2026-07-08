@@ -70,12 +70,10 @@ class CmpService
 
         foreach ($cmpClients as $company) {
             Client::updateOrCreate(
-                ['cmp_id' => (string) $company['id']],
+                ['id' => $company['id']],
                 [
                     'name'         => $company['name'],
                     'company_name' => $company['name'],
-                    'email'        => null,  // not returned by this endpoint
-                    'phone'        => null,  // not returned by this endpoint
                 ]
             );
             $synced++;
