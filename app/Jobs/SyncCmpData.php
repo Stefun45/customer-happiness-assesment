@@ -32,7 +32,7 @@ class SyncCmpData implements ShouldQueue
             $synced = $service->syncClients();
             Log::info("CMP: synced {$synced} clients");
 
-            // Trigger happiness analysis for every client after sync
+            // Trigger happiness re-analysis for all known clients
             Client::whereNotNull('cmp_id')->each(function (Client $client) {
                 AnalyseClientHappiness::dispatch($client)->onQueue('default');
             });
