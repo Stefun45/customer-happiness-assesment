@@ -41,6 +41,7 @@ const sourceLabel: Record<string, string> = {
   freshdesk: 'Support',
   fireflies: 'Call',
   onboarding_helpdesk: 'Onboarding',
+  happiness_review: 'Review',
 }
 
 const empty = { data: [], meta: { current_page: 1, last_page: 1, total: 0 } }

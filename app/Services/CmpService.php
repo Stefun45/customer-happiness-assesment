@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Client;
 use App\Models\ClientContact;
+use App\Models\Communication;
 use GuzzleHttp\Client as GuzzleClient;
 use GuzzleHttp\Exception\GuzzleException;
 use Illuminate\Support\Facades\Log;
@@ -156,5 +157,73 @@ class CmpService
                 ]);
             }
         }
+    }
+
+    /**
+     * Sync customer happiness review submissions from GET /api/customer/happiness.
+     * Scores are on a 1–7 scale (1 = worst, 7 = best).
+     */
+    public function syncHappinessReviews(): int
+    {
+        try {
+            $response = $this->http->get('api/customer/happiness');
+            $body     = json_decode($response->getBody()->getContents(), true) ?? [];
+            $reviews  = $body['customer_happiness'] ?? [];
+        } catch (GuzzleException $e) {
+            Log::error('CMP syncHappinessReviews failed', ['error' => $e->getMessage()]);
+            return 0;
+        }
+
+        $synced = 0;
+
+        foreach ($reviews as $review) {
+            if (!empty($review['is_hidden'])) continue;
+
+            // Link to client: company_id first, then fall back to email match
+            $clientId = null;
+
+            if (!empty($review['company_id'])) {
+                $clientId = Client::where('id', $review['company_id'])->value('id');
+            }
+
+            if (!$clientId && !empty($review['email_address'])) {
+                $clientId = ClientContact::where('email', strtolower(trim($review['email_address'])))
+                    ->value('client_id');
+            }
+
+            if (!$clientId) continue;
+
+            // Parse question_data JSON string
+            $questionData = [];
+            if (!empty($review['question_data'])) {
+                $questionData = json_decode($review['question_data'], true) ?? [];
+            }
+
+            $bodyParts = ["Score: {$review['score']}/7 (1 = worst, 7 = best)"];
+
+            if (!empty($review['software'])) {
+                $bodyParts[] = "Product: {$review['software']}";
+            }
+            if (!empty($questionData['feedback'])) {
+                $bodyParts[] = "Feedback: {$questionData['feedback']}";
+            }
+            if (!empty($questionData['improvements'])) {
+                $bodyParts[] = "Improvements requested: " . implode(', ', $questionData['improvements']);
+            }
+
+            Communication::updateOrCreate(
+                ['source' => 'happiness_review', 'source_id' => (string) $review['id']],
+                [
+                    'client_id'   => $clientId,
+                    'subject'     => "Happiness review: {$review['score']}/7",
+                    'body'        => implode("\n", $bodyParts),
+                    'occurred_at' => $review['created_at'],
+                    'raw_payload' => $review,
+                ]
+            );
+            $synced++;
+        }
+
+        return $synced;
     }
 }

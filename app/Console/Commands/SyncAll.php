@@ -6,6 +6,7 @@ use App\Jobs\SyncCmpData;
 use App\Jobs\SyncFirefliesData;
 use App\Jobs\SyncFreeAgentData;
 use App\Jobs\SyncFreshdeskData;
+use App\Jobs\SyncHappinessReviews;
 use App\Jobs\SyncOnboardingHelpdesk;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
@@ -34,6 +35,9 @@ class SyncAll extends Command
 
         SyncOnboardingHelpdesk::dispatch()->onQueue('default');
         $this->line('  Dispatched: SyncOnboardingHelpdesk');
+
+        SyncHappinessReviews::dispatch()->onQueue('default');
+        $this->line('  Dispatched: SyncHappinessReviews');
 
         $this->info('All sync jobs dispatched successfully.');
 

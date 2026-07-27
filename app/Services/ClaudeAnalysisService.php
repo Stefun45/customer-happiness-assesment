@@ -77,6 +77,8 @@ Scoring guidelines:
 - Score 2-3: Unhappy, significant issues, multiple complaints or overdue invoices
 - Score 0-1: Severely at risk, actively unhappy or in dispute
 
+Note: happiness review submissions use a 1–7 scale (1 = worst, 7 = best). Weight these heavily as they are direct customer feedback.
+
 Churn risk:
 - low: Score >= 7, no major red flags
 - medium: Score 4-6, or any single significant concern
