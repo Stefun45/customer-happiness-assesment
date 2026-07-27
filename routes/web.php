@@ -14,6 +14,8 @@ Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard
 Route::get('/clients', [ClientController::class, 'index'])->name('clients.index');
 Route::get('/clients/{client}', [ClientController::class, 'show'])->name('clients.show');
 Route::post('/clients/{client}/analyse', [ClientController::class, 'analyse'])->name('clients.analyse');
+Route::post('/clients/{client}/mark-as-lost', [ClientController::class, 'markAsLost'])->name('clients.mark-as-lost');
+Route::post('/clients/{client}/restore', [ClientController::class, 'restore'])->name('clients.restore');
 
 Route::get('/communications', [CommunicationController::class, 'index'])->name('communications.index');
 Route::get('/invoices', [InvoiceController::class, 'index'])->name('invoices.index');

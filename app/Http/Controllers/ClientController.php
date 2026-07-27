@@ -5,16 +5,21 @@ namespace App\Http\Controllers;
 use App\Jobs\AnalyseClientHappiness;
 use App\Models\Client;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class ClientController extends Controller
 {
-    public function index(): Response
+    public function index(Request $request): Response
     {
+        $showLost = $request->boolean('lost');
+
         $clients = Client::with([
             'happinessScores' => fn($q) => $q->latest('scored_at')->limit(1),
         ])
+        ->when(!$showLost, fn($q) => $q->whereNull('lost_at'))
+        ->when($showLost, fn($q) => $q->whereNotNull('lost_at'))
         ->orderBy('name')
         ->paginate(50);
 
@@ -35,10 +40,11 @@ class ClientController extends Controller
                 ]),
                 'meta' => [
                     'current_page' => $clients->currentPage(),
-                    'last_page' => $clients->lastPage(),
-                    'total' => $clients->total(),
+                    'last_page'    => $clients->lastPage(),
+                    'total'        => $clients->total(),
                 ],
             ],
+            'show_lost' => $showLost,
         ]);
     }
 
@@ -87,14 +93,16 @@ class ClientController extends Controller
 
         return Inertia::render('Clients/Show', [
             'client' => [
-                'id' => $client->id,
-                'name' => $client->name,
-                'email' => $client->email,
-                'phone' => $client->phone,
-                'company_name' => $client->company_name,
-                'is_new_customer' => $client->is_new_customer,
-                'freshdesk_company_id' => $client->freshdesk_company_id,
+                'id'                   => $client->id,
+                'name'                 => $client->name,
+                'email'                => $client->email,
+                'phone'                => $client->phone,
+                'company_name'         => $client->company_name,
+                'is_new_customer'      => $client->is_new_customer,
+                'freshdesk_id'         => $client->freshdesk_id,
                 'freeagent_contact_id' => $client->freeagent_contact_id,
+                'lost_at'              => $client->lost_at?->toISOString(),
+                'lost_reason'          => $client->lost_reason,
             ],
             'communications' => $communications,
             'invoices' => $invoices,
@@ -108,5 +116,24 @@ class ClientController extends Controller
         AnalyseClientHappiness::dispatch($client)->onQueue('default');
 
         return back()->with('success', "Analysis for {$client->name} has been queued.");
+    }
+
+    public function markAsLost(Request $request, Client $client): RedirectResponse
+    {
+        $request->validate(['reason' => 'nullable|string|max:500']);
+
+        $client->update([
+            'lost_at'     => now(),
+            'lost_reason' => $request->input('reason'),
+        ]);
+
+        return back()->with('success', "{$client->name} has been marked as lost.");
+    }
+
+    public function restore(Client $client): RedirectResponse
+    {
+        $client->update(['lost_at' => null, 'lost_reason' => null]);
+
+        return back()->with('success', "{$client->name} has been restored to active.");
     }
 }

@@ -26,17 +26,21 @@ import {
   Brain,
   AlertTriangle,
   CheckCircle,
+  UserX,
+  RotateCcw,
 } from 'lucide-react'
 
 interface Client {
   id: number
   name: string
-  email: string
+  email: string | null
   phone: string | null
   company_name: string
   is_new_customer: boolean
-  freshdesk_company_id: string | null
+  freshdesk_id: string | null
   freeagent_contact_id: string | null
+  lost_at: string | null
+  lost_reason: string | null
 }
 
 interface Communication {
@@ -106,12 +110,14 @@ function ScoreBar({ score }: { score: number }) {
 const emptyClient: Client = {
   id: 0,
   name: '',
-  email: '',
+  email: null,
   phone: null,
   company_name: '',
   is_new_customer: false,
-  freshdesk_company_id: null,
+  freshdesk_id: null,
   freeagent_contact_id: null,
+  lost_at: null,
+  lost_reason: null,
 }
 
 export default function ClientShow({
@@ -122,16 +128,22 @@ export default function ClientShow({
   score_history = [],
 }: Props) {
   const [analysing, setAnalysing] = React.useState(false)
+  const [lostReason, setLostReason] = React.useState('')
+  const [showLostForm, setShowLostForm] = React.useState(false)
 
   function triggerAnalysis() {
     setAnalysing(true)
-    router.post(
-      `/clients/${client.id}/analyse`,
-      {},
-      {
-        onFinish: () => setAnalysing(false),
-      }
-    )
+    router.post(`/clients/${client.id}/analyse`, {}, { onFinish: () => setAnalysing(false) })
+  }
+
+  function markAsLost() {
+    router.post(`/clients/${client.id}/mark-as-lost`, { reason: lostReason }, {
+      onSuccess: () => { setShowLostForm(false); setLostReason('') },
+    })
+  }
+
+  function restore() {
+    router.post(`/clients/${client.id}/restore`)
   }
 
   const outstandingInvoices = invoices.filter((i) => !i.paid_at)
@@ -140,16 +152,27 @@ export default function ClientShow({
     <AppLayout title={client.name}>
       <Head title={client.name} />
 
+      {/* Lost banner */}
+      {client.lost_at && (
+        <Alert variant="destructive" className="mb-6">
+          <UserX className="h-4 w-4" />
+          <AlertTitle>Customer Lost — {new Date(client.lost_at).toLocaleDateString('en-GB')}</AlertTitle>
+          {client.lost_reason && <AlertDescription>{client.lost_reason}</AlertDescription>}
+        </Alert>
+      )}
+
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
           <h2 className="text-2xl font-bold">{client.name}</h2>
           <p className="text-muted-foreground">{client.company_name}</p>
           <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <Mail className="h-3 w-3" />
-              {client.email}
-            </span>
+            {client.email && (
+              <span className="flex items-center gap-1">
+                <Mail className="h-3 w-3" />
+                {client.email}
+              </span>
+            )}
             {client.phone && (
               <span className="flex items-center gap-1">
                 <Phone className="h-3 w-3" />
@@ -162,10 +185,38 @@ export default function ClientShow({
             </span>
           </div>
         </div>
-        <Button onClick={triggerAnalysis} disabled={analysing}>
-          <RefreshCw className={`h-4 w-4 mr-2 ${analysing ? 'animate-spin' : ''}`} />
-          {analysing ? 'Analysing...' : 'Run AI Analysis'}
-        </Button>
+        <div className="flex items-center gap-2">
+          {client.lost_at ? (
+            <Button variant="outline" onClick={restore}>
+              <RotateCcw className="h-4 w-4 mr-2" />
+              Restore as Active
+            </Button>
+          ) : (
+            <>
+              {showLostForm ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    className="border rounded px-3 py-1.5 text-sm w-64 bg-background"
+                    placeholder="Reason (optional)"
+                    value={lostReason}
+                    onChange={(e) => setLostReason(e.target.value)}
+                  />
+                  <Button variant="destructive" size="sm" onClick={markAsLost}>Confirm</Button>
+                  <Button variant="ghost" size="sm" onClick={() => setShowLostForm(false)}>Cancel</Button>
+                </div>
+              ) : (
+                <Button variant="outline" onClick={() => setShowLostForm(true)}>
+                  <UserX className="h-4 w-4 mr-2" />
+                  Mark as Lost
+                </Button>
+              )}
+            </>
+          )}
+          <Button onClick={triggerAnalysis} disabled={analysing}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${analysing ? 'animate-spin' : ''}`} />
+            {analysing ? 'Analysing...' : 'Run AI Analysis'}
+          </Button>
+        </div>
       </div>
 
       <Tabs defaultValue="overview">

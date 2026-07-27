@@ -20,10 +20,13 @@ class Client extends Model
         'freeagent_contact_id',
         'onboarding_helpdesk_id',
         'is_new_customer',
+        'lost_at',
+        'lost_reason',
     ];
 
     protected $casts = [
         'is_new_customer' => 'boolean',
+        'lost_at'         => 'datetime',
     ];
 
     public function communications(): HasMany
