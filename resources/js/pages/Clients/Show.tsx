@@ -394,7 +394,7 @@ export default function ClientShow({
                             </Badge>
                           )}
                           <span className="text-xs text-muted-foreground">
-                            {new Date(comm.occurred_at).toLocaleDateString('en-GB')}
+                            {comm.occurred_at ? new Date(comm.occurred_at).toLocaleDateString('en-GB') : '—'}
                           </span>
                         </div>
                       </div>

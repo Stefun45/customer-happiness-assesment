@@ -54,11 +54,11 @@ class ClientController extends Controller
             ->orderByDesc('occurred_at')
             ->get()
             ->map(fn($c) => [
-                'id' => $c->id,
-                'source' => $c->source,
-                'subject' => $c->subject,
-                'body' => $c->body,
-                'occurred_at' => $c->occurred_at->toISOString(),
+                'id'              => $c->id,
+                'source'          => $c->source,
+                'subject'         => $c->subject,
+                'body'            => $c->body ?? '',
+                'occurred_at'     => $c->occurred_at?->toISOString(),
                 'sentiment_score' => $c->sentiment_score,
             ]);
 
