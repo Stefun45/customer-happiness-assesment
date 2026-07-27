@@ -1,9 +1,8 @@
 import React from 'react'
-import { Head, Link } from '@inertiajs/react'
+import { Head, router } from '@inertiajs/react'
 import AppLayout from '@/layouts/AppLayout'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import {
   Table,
   TableBody,
@@ -12,7 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Users, AlertTriangle, TrendingUp, Receipt, Eye } from 'lucide-react'
+import { Users, AlertTriangle, TrendingUp, Receipt } from 'lucide-react'
 
 interface HappinessScore {
   score: number
@@ -126,7 +125,7 @@ export default function Dashboard({ stats = mockStats, clients = mockClients }: 
         <CardHeader>
           <CardTitle>Client Overview</CardTitle>
           <CardDescription>
-            All clients with their latest happiness scores and churn risk indicators.
+            Clients ordered by churn risk — highest risk first.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -145,12 +144,15 @@ export default function Dashboard({ stats = mockStats, clients = mockClients }: 
                   <TableHead>Churn Risk</TableHead>
                   <TableHead>Last Contact</TableHead>
                   <TableHead>Outstanding</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {clients.map((client) => (
-                  <TableRow key={client.id}>
+                  <TableRow
+                    key={client.id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => router.visit(`/clients/${client.id}`)}
+                  >
                     <TableCell>
                       <div>
                         <p className="font-medium">{client.name}</p>
@@ -159,9 +161,7 @@ export default function Dashboard({ stats = mockStats, clients = mockClients }: 
                     </TableCell>
                     <TableCell>
                       {client.latest_score ? (
-                        <Badge
-                          variant={happinessBadgeVariant(client.latest_score.score)}
-                        >
+                        <Badge variant={happinessBadgeVariant(client.latest_score.score)}>
                           {client.latest_score.score.toFixed(1)} / 10
                         </Badge>
                       ) : (
@@ -197,14 +197,6 @@ export default function Dashboard({ stats = mockStats, clients = mockClients }: 
                       ) : (
                         <span className="text-muted-foreground text-xs">None</span>
                       )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" asChild>
-                        <Link href={`/clients/${client.id}`}>
-                          <Eye className="h-4 w-4 mr-1" />
-                          View
-                        </Link>
-                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
