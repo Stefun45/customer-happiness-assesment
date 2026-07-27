@@ -25,20 +25,21 @@ class ClaudeAnalysisService
      */
     public function analyseClient(Client $client): array
     {
-        // Fetch recent 90-day communications
+        $cutoff = now()->subDays(60);
+
         $communications = $client->communications()
-            ->where('occurred_at', '>=', now()->subDays(90))
+            ->where('occurred_at', '>=', $cutoff)
             ->orderBy('occurred_at', 'desc')
             ->get();
 
-        // Fetch outstanding invoices
         $outstandingInvoices = $client->invoices()
             ->whereNull('paid_at')
+            ->where('issued_at', '>=', $cutoff)
             ->get();
 
         $allInvoices = $client->invoices()
+            ->where('issued_at', '>=', $cutoff)
             ->orderBy('issued_at', 'desc')
-            ->limit(10)
             ->get();
 
         // Build the context prompt
