@@ -102,11 +102,8 @@ class CmpService
     {
         try {
             $response = $this->http->get("api/company/{$client->id}/contacts");
-            $raw      = $response->getBody()->getContents();
-            $contacts = json_decode($raw, true) ?? [];
-
-            // Temporary: dump response and stop so we can verify field names
-            dd(json_decode($raw, true));
+            $body     = json_decode($response->getBody()->getContents(), true) ?? [];
+            $contacts = $body['contacts'] ?? [];
         } catch (GuzzleException $e) {
             Log::warning('CMP syncContacts failed', [
                 'client_id' => $client->id,
@@ -119,15 +116,15 @@ class CmpService
         $client->contacts()->delete();
 
         foreach ($contacts as $contact) {
-            $name    = $contact['name'] ?? null;
-            $details = $contact['contact_details'] ?? [];
+            $name    = trim(($contact['first_name'] ?? '') . ' ' . ($contact['last_name'] ?? '')) ?: null;
+            $methods = $contact['contact_methods'] ?? [];
 
             $emails = [];
             $phone  = null;
 
-            foreach ($details as $detail) {
-                $type  = strtolower($detail['type'] ?? '');
-                $value = trim($detail['value'] ?? '');
+            foreach ($methods as $method) {
+                $type  = strtolower($method['contact_type'] ?? '');
+                $value = trim($method['contact_reference'] ?? '');
 
                 if (empty($value)) continue;
 
@@ -139,7 +136,6 @@ class CmpService
             }
 
             if (empty($emails)) {
-                // Store contact with just name/phone if no email
                 if ($name || $phone) {
                     ClientContact::create([
                         'client_id' => $client->id,
@@ -150,7 +146,7 @@ class CmpService
                 continue;
             }
 
-            // One row per email address so matching stays simple
+            // One row per email so matching stays simple
             foreach ($emails as $email) {
                 ClientContact::create([
                     'client_id' => $client->id,
