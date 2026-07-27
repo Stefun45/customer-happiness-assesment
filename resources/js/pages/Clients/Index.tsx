@@ -1,9 +1,8 @@
 import React, { useState } from 'react'
-import { Head, Link, router } from '@inertiajs/react'
+import { Head, router } from '@inertiajs/react'
 import AppLayout from '@/layouts/AppLayout'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
   Table,
@@ -13,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Users, Search, Eye } from 'lucide-react'
+import { Users, Search } from 'lucide-react'
 
 interface HappinessScore {
   score: number
@@ -127,7 +126,11 @@ export default function ClientsIndex({ clients = emptyClients, show_lost = false
               </TableHeader>
               <TableBody>
                 {filtered.map((client) => (
-                  <TableRow key={client.id}>
+                  <TableRow
+                    key={client.id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => router.visit(`/clients/${client.id}`)}
+                  >
                     <TableCell className="font-medium">{client.name}</TableCell>
                     <TableCell>{client.company_name}</TableCell>
                     <TableCell className="text-muted-foreground">{client.email ?? '—'}</TableCell>
@@ -158,14 +161,6 @@ export default function ClientsIndex({ clients = emptyClients, show_lost = false
                       ) : (
                         <Badge variant="outline">Existing</Badge>
                       )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" asChild>
-                        <Link href={`/clients/${client.id}`}>
-                          <Eye className="h-4 w-4 mr-1" />
-                          View
-                        </Link>
-                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
