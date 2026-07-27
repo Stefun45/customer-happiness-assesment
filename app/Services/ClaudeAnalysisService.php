@@ -64,6 +64,7 @@ class ClaudeAnalysisService
         })->implode("\n");
 
         $outstandingTotal = $outstandingInvoices->sum('amount_pence') / 100;
+        $customerType     = $client->is_new_customer ? 'New customer' : 'Existing customer';
 
         $systemPrompt = <<<PROMPT
 You are a customer success analyst for The Despatch Company, a fulfilment and logistics business.
@@ -89,7 +90,7 @@ Analyse the following customer and provide a happiness assessment.
 
 CUSTOMER: {$client->name} ({$client->company_name})
 EMAIL: {$client->email}
-TYPE: {$client->is_new_customer ? 'New customer' : 'Existing customer'}
+TYPE: {$customerType}
 
 RECENT COMMUNICATIONS (last 90 days):
 {$communicationsText}
