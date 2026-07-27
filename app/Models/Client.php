@@ -49,6 +49,11 @@ class Client extends Model
         return $this->hasMany(Alert::class);
     }
 
+    public function contacts(): HasMany
+    {
+        return $this->hasMany(ClientContact::class);
+    }
+
     public function latestScore(): ?HappinessScore
     {
         return $this->happinessScores()->latest('scored_at')->first();

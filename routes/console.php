@@ -8,5 +8,5 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-// Sync all integration data every 4 hours
-Schedule::command('app:sync-all')->everyFourHours();
+// Sync all integration data nightly at 2am
+Schedule::command('app:sync-all')->dailyAt('02:00');

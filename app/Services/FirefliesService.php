@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Client;
+use App\Models\ClientContact;
 use App\Models\Communication;
 use GuzzleHttp\Client as GuzzleClient;
 use GuzzleHttp\Exception\GuzzleException;
@@ -109,7 +110,7 @@ class FirefliesService
     }
 
     /**
-     * Sync all calls, matching transcripts to clients by attendee email.
+     * Sync all calls, matching transcripts to clients via CMP contact emails.
      */
     public function syncCalls(): void
     {
@@ -118,31 +119,40 @@ class FirefliesService
         foreach ($transcripts as $transcript) {
             $attendeeEmails = array_column($transcript['meeting_attendees'] ?? [], 'email');
 
+            // Find the first attendee whose email matches a known client contact
+            $client = null;
             foreach ($attendeeEmails as $email) {
-                $client = Client::where('email', $email)->first();
-                if (!$client) {
-                    continue;
+                $contact = ClientContact::where('email', strtolower(trim($email)))
+                    ->with('client')
+                    ->first();
+                if ($contact?->client) {
+                    $client = $contact->client;
+                    break;
                 }
-
-                $body = $transcript['summary']['overview'] ?? '';
-                if (empty($body) && !empty($transcript['sentences'])) {
-                    $body = implode("\n", array_map(
-                        fn($s) => "[{$s['speaker_name']}] {$s['text']}",
-                        array_slice($transcript['sentences'], 0, 50)
-                    ));
-                }
-
-                Communication::updateOrCreate(
-                    ['source' => 'fireflies', 'source_id' => $transcript['id']],
-                    [
-                        'client_id' => $client->id,
-                        'subject' => $transcript['title'] ?? 'Call recording',
-                        'body' => $body,
-                        'occurred_at' => date('Y-m-d H:i:s', $transcript['date'] ?? time()),
-                        'raw_payload' => $transcript,
-                    ]
-                );
             }
+
+            if (!$client) {
+                continue;
+            }
+
+            $body = $transcript['summary']['overview'] ?? '';
+            if (empty($body) && !empty($transcript['sentences'])) {
+                $body = implode("\n", array_map(
+                    fn($s) => "[{$s['speaker_name']}] {$s['text']}",
+                    array_slice($transcript['sentences'], 0, 50)
+                ));
+            }
+
+            Communication::updateOrCreate(
+                ['source' => 'fireflies', 'source_id' => $transcript['id']],
+                [
+                    'client_id'   => $client->id,
+                    'subject'     => $transcript['title'] ?? 'Call recording',
+                    'body'        => $body,
+                    'occurred_at' => date('Y-m-d H:i:s', $transcript['date'] ?? time()),
+                    'raw_payload' => $transcript,
+                ]
+            );
         }
     }
 }

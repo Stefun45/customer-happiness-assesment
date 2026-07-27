@@ -35,4 +35,8 @@ return [
         ],
     ],
 
+    'sso' => [
+        'secret' => env('SSO_SECRET'),
+    ],
+
 ];

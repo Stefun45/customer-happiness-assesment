@@ -8,6 +8,7 @@ use App\Jobs\SyncFreeAgentData;
 use App\Jobs\SyncFreshdeskData;
 use App\Jobs\SyncOnboardingHelpdesk;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 
 class SyncAll extends Command
 {
@@ -35,6 +36,8 @@ class SyncAll extends Command
         $this->line('  Dispatched: SyncOnboardingHelpdesk');
 
         $this->info('All sync jobs dispatched successfully.');
+
+        Cache::put('last_synced_at', now()->toISOString(), 60 * 24 * 7);
 
         return Command::SUCCESS;
     }

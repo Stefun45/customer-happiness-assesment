@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Client;
+use App\Models\ClientContact;
 use GuzzleHttp\Client as GuzzleClient;
 use GuzzleHttp\Exception\GuzzleException;
 use Illuminate\Support\Facades\Log;
@@ -83,5 +84,81 @@ class CmpService
         }
 
         return $synced;
+    }
+
+    /**
+     * Sync contacts for a single client from GET /api/company/{id}/contacts.
+     *
+     * Assumed response shape (adjust field names to match actual API if different):
+     * [
+     *   { "name": "Sean Lade", "contact_details": [
+     *       { "type": "Email", "value": "sean@example.com" },
+     *       { "type": "Work",  "value": "01234567890" }
+     *   ]},
+     *   ...
+     * ]
+     */
+    public function syncContacts(Client $client): void
+    {
+        try {
+            $response = $this->http->get("api/company/{$client->id}/contacts");
+            $raw      = $response->getBody()->getContents();
+            $contacts = json_decode($raw, true) ?? [];
+
+            // Temporary: dump response and stop so we can verify field names
+            dd(json_decode($raw, true));
+        } catch (GuzzleException $e) {
+            Log::warning('CMP syncContacts failed', [
+                'client_id' => $client->id,
+                'error'     => $e->getMessage(),
+            ]);
+            return;
+        }
+
+        // Replace all contacts for this client on each sync
+        $client->contacts()->delete();
+
+        foreach ($contacts as $contact) {
+            $name    = $contact['name'] ?? null;
+            $details = $contact['contact_details'] ?? [];
+
+            $emails = [];
+            $phone  = null;
+
+            foreach ($details as $detail) {
+                $type  = strtolower($detail['type'] ?? '');
+                $value = trim($detail['value'] ?? '');
+
+                if (empty($value)) continue;
+
+                if ($type === 'email') {
+                    $emails[] = strtolower($value);
+                } elseif (in_array($type, ['work', 'phone', 'mobile', 'tel']) && $phone === null) {
+                    $phone = $value;
+                }
+            }
+
+            if (empty($emails)) {
+                // Store contact with just name/phone if no email
+                if ($name || $phone) {
+                    ClientContact::create([
+                        'client_id' => $client->id,
+                        'name'      => $name,
+                        'phone'     => $phone,
+                    ]);
+                }
+                continue;
+            }
+
+            // One row per email address so matching stays simple
+            foreach ($emails as $email) {
+                ClientContact::create([
+                    'client_id' => $client->id,
+                    'name'      => $name,
+                    'email'     => $email,
+                    'phone'     => $phone,
+                ]);
+            }
+        }
     }
 }
