@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Head, Link } from '@inertiajs/react'
+import { Head, Link, router } from '@inertiajs/react'
 import AppLayout from '@/layouts/AppLayout'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -42,6 +42,7 @@ interface Props {
     data: Client[]
     meta: Pagination
   }
+  show_lost: boolean
 }
 
 function churnBadge(risk: string) {
@@ -61,8 +62,12 @@ function scoreBadge(score: number): 'default' | 'secondary' | 'destructive' {
 
 const emptyClients = { data: [], meta: { current_page: 1, last_page: 1, total: 0 } }
 
-export default function ClientsIndex({ clients = emptyClients }: Props) {
+export default function ClientsIndex({ clients = emptyClients, show_lost = false }: Props) {
   const [search, setSearch] = useState('')
+
+  function toggleLost() {
+    router.get('/clients', show_lost ? {} : { lost: 1 }, { preserveState: false })
+  }
 
   const filtered = clients.data.filter(
     (c) =>
@@ -79,11 +84,15 @@ export default function ClientsIndex({ clients = emptyClients }: Props) {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>All Clients</CardTitle>
+              <CardTitle>{show_lost ? 'Lost Clients' : 'Active Clients'}</CardTitle>
               <CardDescription>
                 {clients.meta.total} client{clients.meta.total !== 1 ? 's' : ''} total
               </CardDescription>
             </div>
+            <Button variant={show_lost ? 'default' : 'outline'} onClick={toggleLost}>
+              <Users className="h-4 w-4 mr-2" />
+              {show_lost ? 'View Active' : 'View Lost'}
+            </Button>
           </div>
           <div className="relative mt-4">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
