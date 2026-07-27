@@ -7,25 +7,22 @@ use Illuminate\Console\Command;
 
 class CreateAdminCommand extends Command
 {
-    protected $signature = 'app:create-admin';
-    protected $description = 'Create an admin user interactively';
+    protected $signature = 'app:create-admin {name} {email} {password}';
+    protected $description = 'Create an admin user';
 
     public function handle(): int
     {
-        $name  = $this->ask('Name');
-        $email = $this->ask('Email');
+        $email = $this->argument('email');
 
         if (User::where('email', $email)->exists()) {
             $this->error("A user with email {$email} already exists.");
             return Command::FAILURE;
         }
 
-        $password = $this->secret('Password (min 8 characters)');
-
         User::create([
-            'name'     => $name,
+            'name'     => $this->argument('name'),
             'email'    => $email,
-            'password' => $password,
+            'password' => $this->argument('password'),
             'role'     => 'admin',
         ]);
 
