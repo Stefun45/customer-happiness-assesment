@@ -3,16 +3,29 @@
 namespace App\Http\Controllers;
 
 use App\Models\Communication;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class CommunicationController extends Controller
 {
-    public function index(): Response
+    public function index(Request $request): Response
     {
+        $search = $request->string('search')->trim()->toString();
+        $source = $request->string('source')->trim()->toString();
+
         $communications = Communication::with('client')
+            ->when($source, fn($q) => $q->where('source', $source))
+            ->when($search, function ($q) use ($search) {
+                $q->where(function ($q) use ($search) {
+                    $q->where('subject', 'like', "%{$search}%")
+                      ->orWhere('body', 'like', "%{$search}%")
+                      ->orWhereHas('client', fn($q) => $q->where('name', 'like', "%{$search}%"));
+                });
+            })
             ->orderByDesc('occurred_at')
-            ->paginate(50);
+            ->paginate(50)
+            ->withQueryString();
 
         return Inertia::render('Communications/Index', [
             'communications' => [
@@ -32,6 +45,10 @@ class CommunicationController extends Controller
                     'last_page'    => $communications->lastPage(),
                     'total'        => $communications->total(),
                 ],
+            ],
+            'filters' => [
+                'search' => $search,
+                'source' => $source,
             ],
         ]);
     }
