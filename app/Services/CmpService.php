@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Anthropic\Client as AnthropicClient;
 use App\Models\Client;
 use App\Models\ClientContact;
 use App\Models\Communication;
@@ -191,6 +192,11 @@ class CmpService
                     ->value('client_id');
             }
 
+            // Last resort: ask Claude to match the email domain to a client name
+            if (!$clientId && !empty($review['email_address'])) {
+                $clientId = $this->matchClientByEmail($review['email_address']);
+            }
+
             if (!$clientId) continue;
 
             // Parse question_data JSON string
@@ -225,5 +231,49 @@ class CmpService
         }
 
         return $synced;
+    }
+
+    /**
+     * Use Claude (Haiku) to match an email address to a client by domain similarity.
+     * Only called when company_id is null and no direct email match exists.
+     */
+    private function matchClientByEmail(string $email): ?int
+    {
+        $apiKey = config('integrations.anthropic.api_key');
+        if (!$apiKey) return null;
+
+        $domain  = substr($email, strrpos($email, '@') + 1);
+        $clients = Client::select('id', 'name')->get();
+
+        if ($clients->isEmpty()) return null;
+
+        $clientList = $clients->map(fn($c) => "{$c->id}: {$c->name}")->implode("\n");
+
+        try {
+            $anthropic = new AnthropicClient(apiKey: $apiKey);
+
+            $message = $anthropic->messages->create(
+                model: 'claude-haiku-4-5-20251001',
+                maxTokens: 20,
+                messages: [[
+                    'role'    => 'user',
+                    'content' => "Match this review email to a client based on domain similarity.\n\n"
+                        . "Email: {$email}\nDomain: {$domain}\n\n"
+                        . "Clients (id: name):\n{$clientList}\n\n"
+                        . "Reply with ONLY the numeric client ID if you are confident of the match, "
+                        . "or 'none' if you cannot make a confident match. No explanation.",
+                ]],
+            );
+
+            $answer = trim($message->content[0]->text ?? 'none');
+
+            if ($answer === 'none' || !ctype_digit($answer)) return null;
+
+            $id = (int) $answer;
+            return Client::where('id', $id)->exists() ? $id : null;
+        } catch (\Throwable $e) {
+            Log::warning('CMP matchClientByEmail failed', ['email' => $email, 'error' => $e->getMessage()]);
+            return null;
+        }
     }
 }
