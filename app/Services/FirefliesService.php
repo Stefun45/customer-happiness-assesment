@@ -10,18 +10,20 @@ use Illuminate\Support\Facades\Log;
 
 class FirefliesService
 {
-    protected GuzzleClient $http;
+    protected ?GuzzleClient $http;
 
-    public function __construct(protected string $apiKey)
+    public function __construct(protected ?string $apiKey)
     {
-        $this->http = new GuzzleClient([
-            'base_uri' => 'https://api.fireflies.ai/',
-            'headers' => [
-                'Authorization' => "Bearer {$apiKey}",
-                'Content-Type' => 'application/json',
-            ],
-            'timeout' => 30,
-        ]);
+        if ($this->apiKey) {
+            $this->http = new GuzzleClient([
+                'base_uri' => 'https://api.fireflies.ai/',
+                'headers' => [
+                    'Authorization' => "Bearer {$apiKey}",
+                    'Content-Type' => 'application/json',
+                ],
+                'timeout' => 30,
+            ]);
+        }
     }
 
     /**
@@ -29,6 +31,7 @@ class FirefliesService
      */
     public function getTranscripts(int $limit = 50): array
     {
+        if (!$this->apiKey) return [];
         $query = <<<GQL
         query {
             transcripts(limit: {$limit}) {
@@ -69,6 +72,7 @@ class FirefliesService
      */
     public function getTranscript(string $id): ?array
     {
+        if (!$this->apiKey) return null;
         $query = <<<GQL
         query {
             transcript(id: "{$id}") {

@@ -10,20 +10,22 @@ use Illuminate\Support\Facades\Log;
 
 class OnboardingHelpdeskService
 {
-    protected GuzzleClient $http;
+    protected ?GuzzleClient $http;
 
     public function __construct(
-        protected string $baseUrl,
-        protected string $apiKey
+        protected ?string $baseUrl,
+        protected ?string $apiKey
     ) {
-        $this->http = new GuzzleClient([
-            'base_uri' => rtrim($baseUrl, '/') . '/',
-            'headers' => [
-                'api_access_token' => $apiKey,
-                'Content-Type' => 'application/json',
-            ],
-            'timeout' => 30,
-        ]);
+        if ($this->baseUrl && $this->apiKey) {
+            $this->http = new GuzzleClient([
+                'base_uri' => rtrim($baseUrl, '/') . '/',
+                'headers' => [
+                    'api_access_token' => $apiKey,
+                    'Content-Type' => 'application/json',
+                ],
+                'timeout' => 30,
+            ]);
+        }
     }
 
     /**
@@ -31,6 +33,7 @@ class OnboardingHelpdeskService
      */
     public function getConversations(): array
     {
+        if (!$this->baseUrl || !$this->apiKey) return [];
         try {
             $response = $this->http->get('api/v1/conversations');
             $data = json_decode($response->getBody()->getContents(), true);

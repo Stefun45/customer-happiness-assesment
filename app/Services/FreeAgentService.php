@@ -10,18 +10,20 @@ use Illuminate\Support\Facades\Log;
 
 class FreeAgentService
 {
-    protected GuzzleClient $http;
+    protected ?GuzzleClient $http;
 
-    public function __construct(protected string $accessToken)
+    public function __construct(protected ?string $accessToken)
     {
-        $this->http = new GuzzleClient([
-            'base_uri' => 'https://api.freeagent.com/v2/',
-            'headers' => [
-                'Authorization' => "Bearer {$accessToken}",
-                'Content-Type' => 'application/json',
-            ],
-            'timeout' => 30,
-        ]);
+        if ($this->accessToken) {
+            $this->http = new GuzzleClient([
+                'base_uri' => 'https://api.freeagent.com/v2/',
+                'headers' => [
+                    'Authorization' => "Bearer {$accessToken}",
+                    'Content-Type' => 'application/json',
+                ],
+                'timeout' => 30,
+            ]);
+        }
     }
 
     /**
@@ -29,6 +31,7 @@ class FreeAgentService
      */
     public function getContacts(): array
     {
+        if (!$this->accessToken) return [];
         try {
             $response = $this->http->get('contacts');
             $data = json_decode($response->getBody()->getContents(), true);
@@ -44,6 +47,7 @@ class FreeAgentService
      */
     public function getInvoices(?string $contactId = null): array
     {
+        if (!$this->accessToken) return [];
         try {
             $params = [];
             if ($contactId) {
@@ -63,6 +67,7 @@ class FreeAgentService
      */
     public function getOutstandingInvoices(): array
     {
+        if (!$this->accessToken) return [];
         try {
             $response = $this->http->get('invoices', [
                 'query' => ['view' => 'open_or_overdue'],
