@@ -194,15 +194,18 @@ export default function ClientShow({
           ) : (
             <>
               {showLostForm ? (
-                <div className="flex items-center gap-2">
-                  <input
-                    className="border rounded px-3 py-1.5 text-sm w-64 bg-background"
+                <div className="flex items-start gap-2">
+                  <textarea
+                    className="border rounded px-3 py-1.5 text-sm w-80 bg-background resize-none"
                     placeholder="Reason (optional)"
+                    rows={3}
                     value={lostReason}
                     onChange={(e) => setLostReason(e.target.value)}
                   />
-                  <Button variant="destructive" size="sm" onClick={markAsLost}>Confirm</Button>
-                  <Button variant="ghost" size="sm" onClick={() => setShowLostForm(false)}>Cancel</Button>
+                  <div className="flex flex-col gap-1">
+                    <Button variant="destructive" size="sm" onClick={markAsLost}>Confirm</Button>
+                    <Button variant="ghost" size="sm" onClick={() => setShowLostForm(false)}>Cancel</Button>
+                  </div>
                 </div>
               ) : (
                 <Button variant="outline" onClick={() => setShowLostForm(true)}>

@@ -120,7 +120,7 @@ class ClientController extends Controller
 
     public function markAsLost(Request $request, Client $client): RedirectResponse
     {
-        $request->validate(['reason' => 'nullable|string|max:500']);
+        $request->validate(['reason' => 'nullable|string|max:5000']);
 
         $client->update([
             'lost_at'     => now(),
