@@ -29,20 +29,18 @@ class DashboardController extends Controller
             )
             ->avg('hs.score') ?? 0;
 
-        // Join to latest happiness score per client for DB-level ordering
+        // One row per client — the latest score based on highest id
         $latestScores = DB::table('happiness_scores')
-            ->select(DB::raw('MAX(id) as id'))
-            ->groupBy('client_id');
+            ->select('client_id', 'score', 'churn_risk')
+            ->whereIn('id', function ($q) {
+                $q->selectRaw('MAX(id)')->from('happiness_scores')->groupBy('client_id');
+            });
 
         $clients = Client::with([
             'happinessScores' => fn($q) => $q->latest('scored_at')->limit(1),
             'invoices'        => fn($q) => $q->whereNull('paid_at'),
         ])
-        ->leftJoinSub(
-            DB::table('happiness_scores')->joinSub($latestScores, 'lsi', 'happiness_scores.id', '=', 'lsi.id'),
-            'ls',
-            'clients.id', '=', 'ls.client_id'
-        )
+        ->leftJoinSub($latestScores, 'ls', 'clients.id', '=', 'ls.client_id')
         ->select('clients.*')
         ->whereNull('clients.lost_at')
         ->orderByRaw("CASE WHEN ls.churn_risk = 'high' THEN 0 WHEN ls.churn_risk = 'medium' THEN 1 WHEN ls.churn_risk = 'low' THEN 2 ELSE 3 END")
