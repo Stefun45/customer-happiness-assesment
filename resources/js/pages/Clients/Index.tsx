@@ -3,6 +3,7 @@ import { Head, router } from '@inertiajs/react'
 import AppLayout from '@/layouts/AppLayout'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
   Table,
@@ -121,7 +122,6 @@ export default function ClientsIndex({ clients = emptyClients, show_lost = false
                   <TableHead>Happiness</TableHead>
                   <TableHead>Churn Risk</TableHead>
                   <TableHead>Type</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
