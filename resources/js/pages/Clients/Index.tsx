@@ -23,7 +23,7 @@ interface HappinessScore {
 interface Client {
   id: number
   name: string
-  email: string
+  email: string | null
   company_name: string
   phone: string | null
   is_new_customer: boolean
@@ -68,7 +68,7 @@ export default function ClientsIndex({ clients = emptyClients }: Props) {
     (c) =>
       c.name.toLowerCase().includes(search.toLowerCase()) ||
       c.company_name.toLowerCase().includes(search.toLowerCase()) ||
-      c.email.toLowerCase().includes(search.toLowerCase())
+      (c.email ?? '').toLowerCase().includes(search.toLowerCase())
   )
 
   return (
@@ -121,7 +121,7 @@ export default function ClientsIndex({ clients = emptyClients }: Props) {
                   <TableRow key={client.id}>
                     <TableCell className="font-medium">{client.name}</TableCell>
                     <TableCell>{client.company_name}</TableCell>
-                    <TableCell className="text-muted-foreground">{client.email}</TableCell>
+                    <TableCell className="text-muted-foreground">{client.email ?? '—'}</TableCell>
                     <TableCell>
                       {client.latest_score ? (
                         <Badge variant={scoreBadge(client.latest_score.score)}>
