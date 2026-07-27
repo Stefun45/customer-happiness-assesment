@@ -175,16 +175,26 @@ class CmpService
             return 0;
         }
 
-        $synced = 0;
+        $synced   = 0;
+        $skipped  = 0;
 
         foreach ($reviews as $review) {
-            if (!empty($review['is_hidden'])) continue;
+            if (!empty($review['is_hidden'])) {
+                $skipped++;
+                continue;
+            }
 
             // Link to client: company_id first, then fall back to email match
             $clientId = null;
 
             if (!empty($review['company_id'])) {
                 $clientId = Client::where('id', $review['company_id'])->value('id');
+                if (!$clientId) {
+                    Log::warning('CMP happiness: company_id not found locally', [
+                        'review_id'  => $review['id'],
+                        'company_id' => $review['company_id'],
+                    ]);
+                }
             }
 
             if (!$clientId && !empty($review['email_address'])) {
@@ -197,7 +207,15 @@ class CmpService
                 $clientId = $this->matchClientByEmail($review['email_address']);
             }
 
-            if (!$clientId) continue;
+            if (!$clientId) {
+                Log::info('CMP happiness: no client match, skipping', [
+                    'review_id'    => $review['id'],
+                    'company_id'   => $review['company_id'] ?? null,
+                    'email'        => $review['email_address'] ?? null,
+                ]);
+                $skipped++;
+                continue;
+            }
 
             // Parse question_data JSON string
             $questionData = [];
@@ -229,6 +247,8 @@ class CmpService
             );
             $synced++;
         }
+
+        Log::info("CMP happiness: synced {$synced}, skipped {$skipped} of " . count($reviews));
 
         return $synced;
     }
