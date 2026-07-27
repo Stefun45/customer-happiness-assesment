@@ -16,6 +16,7 @@ class Client extends Model
         'email',
         'phone',
         'company_name',
+        'freshdesk_id',
         'freeagent_contact_id',
         'onboarding_helpdesk_id',
         'is_new_customer',

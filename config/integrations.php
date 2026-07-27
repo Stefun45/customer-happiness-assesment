@@ -6,6 +6,11 @@ return [
         'api_key'  => env('CMP_API_KEY'),
     ],
 
+    'freshdesk' => [
+        'api_key' => env('FRESHDESK_API_KEY'),
+        'domain'  => env('FRESHDESK_DOMAIN'),
+    ],
+
     'fireflies' => [
         'api_key' => env('FIREFLIES_API_KEY'),
     ],

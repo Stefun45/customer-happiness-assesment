@@ -74,6 +74,7 @@ class CmpService
                 [
                     'name'         => $company['name'],
                     'company_name' => $company['name'],
+                    'freshdesk_id' => $company['integration_id_references']['freshdesk_id'] ?? null,
                 ]
             );
             $synced++;

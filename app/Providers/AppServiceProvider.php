@@ -6,6 +6,7 @@ use App\Services\ClaudeAnalysisService;
 use App\Services\CmpService;
 use App\Services\FirefliesService;
 use App\Services\FreeAgentService;
+use App\Services\FreshdeskService;
 use App\Services\OnboardingHelpdeskService;
 use Illuminate\Support\ServiceProvider;
 
@@ -16,6 +17,11 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(CmpService::class, fn() => new CmpService(
             baseUrl: config('integrations.cmp.base_url'),
             apiKey:  config('integrations.cmp.api_key'),
+        ));
+
+        $this->app->singleton(FreshdeskService::class, fn() => new FreshdeskService(
+            apiKey: config('integrations.freshdesk.api_key'),
+            domain: config('integrations.freshdesk.domain'),
         ));
 
         $this->app->singleton(FirefliesService::class, fn() => new FirefliesService(
