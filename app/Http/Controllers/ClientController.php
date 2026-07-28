@@ -14,14 +14,21 @@ class ClientController extends Controller
     public function index(Request $request): Response
     {
         $showLost = $request->boolean('lost');
+        $search   = $request->string('search')->trim()->toString();
 
         $clients = Client::with([
             'happinessScores' => fn($q) => $q->latest('scored_at')->limit(1),
         ])
         ->when(!$showLost, fn($q) => $q->whereNull('lost_at'))
         ->when($showLost, fn($q) => $q->whereNotNull('lost_at'))
+        ->when($search, fn($q) => $q->where(function ($q) use ($search) {
+            $q->where('name', 'like', "%{$search}%")
+              ->orWhere('company_name', 'like', "%{$search}%")
+              ->orWhere('email', 'like', "%{$search}%");
+        }))
         ->orderBy('name')
-        ->paginate(50);
+        ->paginate(50)
+        ->withQueryString();
 
         return Inertia::render('Clients/Index', [
             'clients' => [
@@ -46,6 +53,7 @@ class ClientController extends Controller
                 ],
             ],
             'show_lost' => $showLost,
+            'filters'   => ['search' => $search],
         ]);
     }
 

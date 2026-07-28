@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Head, router } from '@inertiajs/react'
 import AppLayout from '@/layouts/AppLayout'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -44,6 +44,7 @@ interface Props {
     meta: Pagination
   }
   show_lost: boolean
+  filters: { search: string }
 }
 
 function churnBadge(risk: string) {
@@ -61,10 +62,28 @@ function scoreBadge(score: number): 'default' | 'secondary' | 'destructive' {
   return 'destructive'
 }
 
-const emptyClients = { data: [], meta: { current_page: 1, last_page: 1, total: 0 } }
+const emptyClients = { data: [], meta: { current_page: 1, last_page: 1, per_page: 50, total: 0 } }
 
-export default function ClientsIndex({ clients = emptyClients, show_lost = false }: Props) {
-  const [search, setSearch] = useState('')
+export default function ClientsIndex({
+  clients = emptyClients,
+  show_lost = false,
+  filters = { search: '' },
+}: Props) {
+  const [search, setSearch] = useState(filters.search)
+
+  // Debounce search — reset to page 1 when query changes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (search !== filters.search) {
+        router.get(
+          '/clients',
+          { search: search || undefined, lost: show_lost ? 1 : undefined },
+          { preserveState: true, replace: true }
+        )
+      }
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [search])
 
   function toggleLost() {
     router.get('/clients', show_lost ? {} : { lost: 1 }, { preserveState: false })
@@ -73,16 +92,11 @@ export default function ClientsIndex({ clients = emptyClients, show_lost = false
   function goToPage(page: number) {
     const params: Record<string, string | number> = { page }
     if (show_lost) params.lost = 1
-    if (search) params.search = search
+    if (filters.search) params.search = filters.search
     router.get('/clients', params, { preserveState: true, preserveScroll: true })
   }
 
-  const filtered = clients.data.filter(
-    (c) =>
-      c.name.toLowerCase().includes(search.toLowerCase()) ||
-      c.company_name.toLowerCase().includes(search.toLowerCase()) ||
-      (c.email ?? '').toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = clients.data
 
   return (
     <AppLayout title="Clients">
@@ -94,7 +108,8 @@ export default function ClientsIndex({ clients = emptyClients, show_lost = false
             <div>
               <CardTitle>{show_lost ? 'Lost Clients' : 'Active Clients'}</CardTitle>
               <CardDescription>
-                {clients.meta.total} client{clients.meta.total !== 1 ? 's' : ''} total
+                {clients.meta.total} client{clients.meta.total !== 1 ? 's' : ''}
+                {filters.search ? ` matching "${filters.search}"` : ' total'}
               </CardDescription>
             </div>
             <Button variant={show_lost ? 'default' : 'outline'} onClick={toggleLost}>
