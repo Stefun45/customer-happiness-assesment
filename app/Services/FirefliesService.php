@@ -28,14 +28,15 @@ class FirefliesService
     }
 
     /**
-     * Fetch recent transcripts from Fireflies.
+     * Fetch a single page of transcripts from Fireflies.
      */
-    public function getTranscripts(int $limit = 50): array
+    public function getTranscripts(int $limit = 50, int $skip = 0): array
     {
         if (!$this->apiKey) return [];
+
         $query = <<<GQL
         query {
-            transcripts(limit: {$limit}) {
+            transcripts(limit: {$limit}, skip: {$skip}) {
                 id
                 title
                 date
@@ -63,9 +64,29 @@ class FirefliesService
             $data = json_decode($response->getBody()->getContents(), true);
             return $data['data']['transcripts'] ?? [];
         } catch (GuzzleException $e) {
-            Log::error('Fireflies getTranscripts failed', ['error' => $e->getMessage()]);
+            Log::error('Fireflies getTranscripts failed', [
+                'skip'  => $skip,
+                'error' => $e->getMessage(),
+            ]);
             return [];
         }
+    }
+
+    /**
+     * Fetch all transcripts by paginating through the Fireflies API.
+     */
+    public function getAllTranscripts(int $batchSize = 50): array
+    {
+        $all  = [];
+        $skip = 0;
+
+        do {
+            $batch = $this->getTranscripts($batchSize, $skip);
+            $all   = array_merge($all, $batch);
+            $skip += $batchSize;
+        } while (count($batch) === $batchSize);
+
+        return $all;
     }
 
     /**
@@ -114,7 +135,11 @@ class FirefliesService
      */
     public function syncCalls(): void
     {
-        $transcripts = $this->getTranscripts();
+        $transcripts = $this->getAllTranscripts();
+        $synced      = 0;
+        $skipped     = 0;
+
+        Log::info('Fireflies: fetched ' . count($transcripts) . ' transcripts total');
 
         foreach ($transcripts as $transcript) {
             $attendeeEmails = array_column($transcript['meeting_attendees'] ?? [], 'email');
@@ -122,6 +147,7 @@ class FirefliesService
             // Find the first attendee whose email matches a known client contact
             $client = null;
             foreach ($attendeeEmails as $email) {
+                if (empty($email)) continue;
                 $contact = ClientContact::where('email', strtolower(trim($email)))
                     ->with('client')
                     ->first();
@@ -132,6 +158,12 @@ class FirefliesService
             }
 
             if (!$client) {
+                Log::debug('Fireflies: no client match for transcript', [
+                    'id'      => $transcript['id'],
+                    'title'   => $transcript['title'] ?? null,
+                    'emails'  => $attendeeEmails,
+                ]);
+                $skipped++;
                 continue;
             }
 
@@ -153,6 +185,9 @@ class FirefliesService
                     'raw_payload' => $transcript,
                 ]
             );
+            $synced++;
         }
+
+        Log::info("Fireflies: synced {$synced}, skipped {$skipped} of " . count($transcripts));
     }
 }
