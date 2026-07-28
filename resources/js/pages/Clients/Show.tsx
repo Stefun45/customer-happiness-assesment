@@ -28,6 +28,8 @@ import {
   CheckCircle,
   UserX,
   RotateCcw,
+  Users,
+  Star,
 } from 'lucide-react'
 
 interface Client {
@@ -73,12 +75,25 @@ interface HappinessScore {
   scored_at: string
 }
 
+interface Contact {
+  id: number
+  name: string | null
+  email: string | null
+  phone: string | null
+  latest_review: {
+    id: number
+    score: number | null
+    occurred_at: string
+  } | null
+}
+
 interface Props {
   client: Client
   communications: Communication[]
   invoices: Invoice[]
   latest_score: HappinessScore | null
   score_history: HappinessScore[]
+  contacts: Contact[]
 }
 
 function sourceBadge(source: string) {
@@ -126,6 +141,7 @@ export default function ClientShow({
   invoices = [],
   latest_score = null,
   score_history = [],
+  contacts = [],
 }: Props) {
   const [analysing, setAnalysing] = React.useState(false)
   const [lostReason, setLostReason] = React.useState('')
@@ -239,6 +255,12 @@ export default function ClientShow({
               <Badge variant="destructive" className="ml-2 text-xs">
                 {outstandingInvoices.length}
               </Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="contacts">
+            Contacts
+            {contacts.length > 0 && (
+              <Badge variant="secondary" className="ml-2 text-xs">{contacts.length}</Badge>
             )}
           </TabsTrigger>
           <TabsTrigger value="ai-analysis">AI Analysis</TabsTrigger>
@@ -464,6 +486,80 @@ export default function ClientShow({
                           ) : (
                             <span className="text-muted-foreground">—</span>
                           )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* CONTACTS TAB */}
+        <TabsContent value="contacts" className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Contacts</CardTitle>
+              <CardDescription>People synced from CMP, with their latest happiness review if any</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {contacts.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Users className="h-12 w-12 mx-auto mb-4 opacity-30" />
+                  <p>No contacts synced yet. Run a full sync to pull contacts from CMP.</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Phone</TableHead>
+                      <TableHead>Review</TableHead>
+                      <TableHead>Review Date</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {contacts.map((contact) => (
+                      <TableRow key={contact.id}>
+                        <TableCell className="font-medium">
+                          {contact.name ?? <span className="text-muted-foreground">—</span>}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                          {contact.email ?? '—'}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                          {contact.phone ?? '—'}
+                        </TableCell>
+                        <TableCell>
+                          {contact.latest_review ? (
+                            <div className="flex items-center gap-1.5">
+                              <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500" />
+                              <span className="font-medium text-sm">
+                                {contact.latest_review.score}/7
+                              </span>
+                              <Badge
+                                variant={
+                                  (contact.latest_review.score ?? 0) >= 5 ? 'default'
+                                  : (contact.latest_review.score ?? 0) >= 3 ? 'secondary'
+                                  : 'destructive'
+                                }
+                                className="text-xs"
+                              >
+                                {(contact.latest_review.score ?? 0) >= 5 ? 'Positive'
+                                  : (contact.latest_review.score ?? 0) >= 3 ? 'Neutral'
+                                  : 'Negative'}
+                              </Badge>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">No review</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                          {contact.latest_review?.occurred_at
+                            ? new Date(contact.latest_review.occurred_at).toLocaleDateString('en-GB')
+                            : '—'}
                         </TableCell>
                       </TableRow>
                     ))}

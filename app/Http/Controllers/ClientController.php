@@ -92,6 +92,32 @@ class ClientController extends Controller
 
         $latestScore = $scoreHistory->last();
 
+        // Load contacts and check which have submitted happiness reviews
+        $contacts = $client->contacts()->orderBy('name')->get();
+        $reviews  = $client->communications()
+            ->where('source', 'happiness_review')
+            ->orderByDesc('occurred_at')
+            ->get();
+
+        $mappedContacts = $contacts->map(function ($contact) use ($reviews) {
+            $email  = strtolower($contact->email ?? '');
+            $review = $email ? $reviews->first(function ($r) use ($email) {
+                return strtolower($r->raw_payload['email_address'] ?? '') === $email;
+            }) : null;
+
+            return [
+                'id'            => $contact->id,
+                'name'          => $contact->name,
+                'email'         => $contact->email,
+                'phone'         => $contact->phone,
+                'latest_review' => $review ? [
+                    'id'          => $review->id,
+                    'score'       => $review->raw_payload['score'] ?? null,
+                    'occurred_at' => $review->occurred_at?->toISOString(),
+                ] : null,
+            ];
+        });
+
         return Inertia::render('Clients/Show', [
             'client' => [
                 'id'                   => $client->id,
@@ -106,9 +132,10 @@ class ClientController extends Controller
                 'lost_reason'          => $client->lost_reason,
             ],
             'communications' => $communications,
-            'invoices' => $invoices,
-            'latest_score' => $latestScore,
-            'score_history' => $scoreHistory,
+            'invoices'       => $invoices,
+            'latest_score'   => $latestScore,
+            'score_history'  => $scoreHistory,
+            'contacts'       => $mappedContacts,
         ]);
     }
 
