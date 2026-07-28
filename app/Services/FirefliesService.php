@@ -222,6 +222,11 @@ class FirefliesService
     /**
      * Use Claude Haiku to match an attendee email to a client by domain/name similarity.
      */
+    public function matchClientByEmailPublic(string $email): ?Client
+    {
+        return $this->matchClientByEmail($email);
+    }
+
     private function matchClientByEmail(string $email): ?Client
     {
         $apiKey = config('integrations.anthropic.api_key');
