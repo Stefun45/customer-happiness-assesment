@@ -6,6 +6,7 @@ use App\Jobs\AnalyseClientHappiness;
 use App\Models\Client;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -13,22 +14,46 @@ class ClientController extends Controller
 {
     public function index(Request $request): Response
     {
-        $showLost = $request->boolean('lost');
-        $search   = $request->string('search')->trim()->toString();
+        $showLost  = $request->boolean('lost');
+        $search    = $request->string('search')->trim()->toString();
+        $sortBy    = $request->input('sort', 'name');
+        $sortDir   = $request->input('direction', 'asc') === 'desc' ? 'desc' : 'asc';
 
-        $clients = Client::with([
+        $validSorts = ['name', 'happiness', 'churn_risk'];
+        if (!in_array($sortBy, $validSorts)) $sortBy = 'name';
+
+        $needsScoreJoin = in_array($sortBy, ['happiness', 'churn_risk']);
+
+        $query = Client::with([
             'happinessScores' => fn($q) => $q->latest('scored_at')->limit(1),
         ])
-        ->when(!$showLost, fn($q) => $q->whereNull('lost_at'))
-        ->when($showLost, fn($q) => $q->whereNotNull('lost_at'))
+        ->when($needsScoreJoin, function ($q) {
+            $latestScores = DB::table('happiness_scores')
+                ->select('client_id', 'score', 'churn_risk')
+                ->whereIn('id', function ($q) {
+                    $q->selectRaw('MAX(id)')->from('happiness_scores')->groupBy('client_id');
+                });
+            $q->leftJoinSub($latestScores, 'ls', 'clients.id', '=', 'ls.client_id')
+              ->select('clients.*');
+        })
+        ->when(!$showLost, fn($q) => $q->whereNull('clients.lost_at'))
+        ->when($showLost, fn($q) => $q->whereNotNull('clients.lost_at'))
         ->when($search, fn($q) => $q->where(function ($q) use ($search) {
-            $q->where('name', 'like', "%{$search}%")
-              ->orWhere('company_name', 'like', "%{$search}%")
-              ->orWhere('email', 'like', "%{$search}%");
-        }))
-        ->orderBy('name')
-        ->paginate(50)
-        ->withQueryString();
+            $q->where('clients.name', 'like', "%{$search}%")
+              ->orWhere('clients.company_name', 'like', "%{$search}%")
+              ->orWhere('clients.email', 'like', "%{$search}%");
+        }));
+
+        if ($sortBy === 'happiness') {
+            $query->orderByRaw("ls.score IS NULL ASC")->orderBy('ls.score', $sortDir);
+        } elseif ($sortBy === 'churn_risk') {
+            $dir = $sortDir === 'asc' ? [0 => 'high', 1 => 'medium', 2 => 'low', 3 => ''] : [0 => 'low', 1 => 'medium', 2 => 'high', 3 => ''];
+            $query->orderByRaw("CASE WHEN ls.churn_risk = 'high' THEN 0 WHEN ls.churn_risk = 'medium' THEN 1 WHEN ls.churn_risk = 'low' THEN 2 ELSE 3 END " . ($sortDir === 'asc' ? 'ASC' : 'DESC'));
+        } else {
+            $query->orderBy('clients.name', $sortDir);
+        }
+
+        $clients = $query->paginate(50)->withQueryString();
 
         return Inertia::render('Clients/Index', [
             'clients' => [
@@ -53,7 +78,11 @@ class ClientController extends Controller
                 ],
             ],
             'show_lost' => $showLost,
-            'filters'   => ['search' => $search],
+            'filters'   => [
+                'search'    => $search,
+                'sort'      => $sortBy,
+                'direction' => $sortDir,
+            ],
         ]);
     }
 

@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Users, Search } from 'lucide-react'
+import { Users, Search, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 
 interface HappinessScore {
   score: number
@@ -44,7 +44,7 @@ interface Props {
     meta: Pagination
   }
   show_lost: boolean
-  filters: { search: string }
+  filters: { search: string; sort: string; direction: string }
 }
 
 function churnBadge(risk: string) {
@@ -67,9 +67,31 @@ const emptyClients = { data: [], meta: { current_page: 1, last_page: 1, per_page
 export default function ClientsIndex({
   clients = emptyClients,
   show_lost = false,
-  filters = { search: '' },
+  filters = { search: '', sort: 'name', direction: 'asc' },
 }: Props) {
   const [search, setSearch] = useState(filters.search)
+
+  function sortBy(col: string) {
+    const direction =
+      filters.sort === col && filters.direction === 'asc' ? 'desc' : 'asc'
+    router.get(
+      '/clients',
+      {
+        sort: col,
+        direction,
+        search: filters.search || undefined,
+        lost: show_lost ? 1 : undefined,
+      },
+      { preserveState: true, replace: true }
+    )
+  }
+
+  function SortIcon({ col }: { col: string }) {
+    if (filters.sort !== col) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-40" />
+    return filters.direction === 'asc'
+      ? <ArrowUp className="h-3 w-3 ml-1" />
+      : <ArrowDown className="h-3 w-3 ml-1" />
+  }
 
   // Debounce search — reset to page 1 when query changes
   useEffect(() => {
@@ -90,10 +112,17 @@ export default function ClientsIndex({
   }
 
   function goToPage(page: number) {
-    const params: Record<string, string | number> = { page }
-    if (show_lost) params.lost = 1
-    if (filters.search) params.search = filters.search
-    router.get('/clients', params, { preserveState: true, preserveScroll: true })
+    router.get(
+      '/clients',
+      {
+        page,
+        search: filters.search || undefined,
+        sort: filters.sort !== 'name' ? filters.sort : undefined,
+        direction: filters.direction !== 'asc' ? filters.direction : undefined,
+        lost: show_lost ? 1 : undefined,
+      },
+      { preserveState: true, preserveScroll: true }
+    )
   }
 
   const filtered = clients.data
@@ -140,11 +169,17 @@ export default function ClientsIndex({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={() => sortBy('name')}>
+                      <span className="flex items-center">Name <SortIcon col="name" /></span>
+                    </TableHead>
                     <TableHead>Company</TableHead>
                     <TableHead>Email</TableHead>
-                    <TableHead>Happiness</TableHead>
-                    <TableHead>Churn Risk</TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={() => sortBy('happiness')}>
+                      <span className="flex items-center">Happiness <SortIcon col="happiness" /></span>
+                    </TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={() => sortBy('churn_risk')}>
+                      <span className="flex items-center">Churn Risk <SortIcon col="churn_risk" /></span>
+                    </TableHead>
                     <TableHead>Type</TableHead>
                   </TableRow>
                 </TableHeader>
