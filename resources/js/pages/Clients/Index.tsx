@@ -13,9 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Label } from '@/components/ui/label'
-import { Users, Search, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
+import { Users, Search, ArrowUpDown, ArrowUp, ArrowDown, Building2 } from 'lucide-react'
 
 interface HappinessScore {
   score: number
@@ -135,17 +133,11 @@ export default function ClientsIndex({
                 {filters.search ? ` matching "${filters.search}"` : ' total'}
               </CardDescription>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="enterprise-filter"
-                  checked={filters.enterprise}
-                  onCheckedChange={toggleEnterprise}
-                />
-                <Label htmlFor="enterprise-filter" className="cursor-pointer text-sm">
-                  Enterprise only
-                </Label>
-              </div>
+            <div className="flex items-center gap-2">
+              <Button variant={filters.enterprise ? 'default' : 'outline'} onClick={toggleEnterprise}>
+                <Building2 className="h-4 w-4 mr-2" />
+                Enterprise only
+              </Button>
               <Button variant={show_lost ? 'default' : 'outline'} onClick={toggleLost}>
                 <Users className="h-4 w-4 mr-2" />
                 {show_lost ? 'View Active' : 'View Lost'}
