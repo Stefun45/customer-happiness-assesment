@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Anthropic\Client as AnthropicClient;
 use App\Models\Client;
 use App\Models\ClientContact;
 use App\Models\Communication;
@@ -157,11 +158,23 @@ class FirefliesService
                 }
             }
 
+            // Claude fallback — try each attendee email against company names/domains
+            if (!$client) {
+                foreach ($attendeeEmails as $email) {
+                    if (empty($email)) continue;
+                    $matched = $this->matchClientByEmail($email);
+                    if ($matched) {
+                        $client = $matched;
+                        break;
+                    }
+                }
+            }
+
             if (!$client) {
                 Log::debug('Fireflies: no client match for transcript', [
-                    'id'      => $transcript['id'],
-                    'title'   => $transcript['title'] ?? null,
-                    'emails'  => $attendeeEmails,
+                    'id'     => $transcript['id'],
+                    'title'  => $transcript['title'] ?? null,
+                    'emails' => $attendeeEmails,
                 ]);
                 $skipped++;
                 continue;
@@ -189,5 +202,47 @@ class FirefliesService
         }
 
         Log::info("Fireflies: synced {$synced}, skipped {$skipped} of " . count($transcripts));
+    }
+
+    /**
+     * Use Claude Haiku to match an attendee email to a client by domain/name similarity.
+     */
+    private function matchClientByEmail(string $email): ?Client
+    {
+        $apiKey = config('integrations.anthropic.api_key');
+        if (!$apiKey) return null;
+
+        $domain  = substr($email, strrpos($email, '@') + 1);
+        $clients = Client::select('id', 'name')->get();
+        if ($clients->isEmpty()) return null;
+
+        $clientList = $clients->map(fn($c) => "{$c->id}: {$c->name}")->implode("\n");
+
+        try {
+            $anthropic = new AnthropicClient(apiKey: $apiKey);
+
+            $message = $anthropic->messages->create(
+                model: 'claude-haiku-4-5-20251001',
+                maxTokens: 20,
+                messages: [[
+                    'role'    => 'user',
+                    'content' => "Match this call attendee email to a client based on domain/company name similarity.\n\n"
+                        . "Email: {$email}\nDomain: {$domain}\n\n"
+                        . "Clients (id: name):\n{$clientList}\n\n"
+                        . "Reply with ONLY the numeric client ID if confident, or 'none' if not. No explanation.",
+                ]],
+            );
+
+            $answer = trim($message->content[0]->text ?? 'none');
+            if ($answer === 'none' || !ctype_digit($answer)) return null;
+
+            return Client::find((int) $answer);
+        } catch (\Throwable $e) {
+            Log::warning('Fireflies matchClientByEmail failed', [
+                'email' => $email,
+                'error' => $e->getMessage(),
+            ]);
+            return null;
+        }
     }
 }
