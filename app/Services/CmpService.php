@@ -161,18 +161,36 @@ class CmpService
     }
 
     /**
-     * Fetch the raw happiness review list from the CMP API.
+     * Fetch all happiness reviews from the CMP API, handling pagination.
      */
     public function fetchHappinessReviews(): array
     {
-        try {
-            $response = $this->http->get('api/customer/happiness');
-            $body     = json_decode($response->getBody()->getContents(), true) ?? [];
-            return $body['customer_happiness'] ?? [];
-        } catch (GuzzleException $e) {
-            Log::error('CMP fetchHappinessReviews failed', ['error' => $e->getMessage()]);
-            return [];
-        }
+        $reviews  = [];
+        $page     = 1;
+
+        do {
+            try {
+                $response = $this->http->get('api/customer/happiness', [
+                    'query' => [
+                        'per_page' => 100,
+                        'page'     => $page,
+                    ],
+                ]);
+                $body     = json_decode($response->getBody()->getContents(), true) ?? [];
+                $batch    = $body['customer_happiness'] ?? [];
+                $lastPage = $body['pagination']['last_page'] ?? 1;
+
+                Log::info("CMP fetchHappinessReviews: page {$page}/{$lastPage}, got " . count($batch));
+
+                $reviews = array_merge($reviews, $batch);
+                $page++;
+            } catch (GuzzleException $e) {
+                Log::error('CMP fetchHappinessReviews failed', ['page' => $page, 'error' => $e->getMessage()]);
+                break;
+            }
+        } while ($page <= $lastPage);
+
+        return $reviews;
     }
 
     /**
