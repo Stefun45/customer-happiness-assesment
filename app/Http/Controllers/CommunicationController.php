@@ -16,12 +16,12 @@ class CommunicationController extends Controller
         $search = $request->string('search')->trim()->toString();
         $source = $request->string('source')->trim()->toString();
 
-        $communications = Communication::with('client')
+        $communications = Communication::with('client:id,name')
+            ->select(['id', 'client_id', 'source', 'subject', 'body', 'occurred_at', 'sentiment_score'])
             ->when($source, fn($q) => $q->where('source', $source))
             ->when($search, function ($q) use ($search) {
                 $q->where(function ($q) use ($search) {
                     $q->where('subject', 'like', "%{$search}%")
-                      ->orWhere('body', 'like', "%{$search}%")
                       ->orWhereHas('client', fn($q) => $q->where('name', 'like', "%{$search}%"));
                 });
             })
