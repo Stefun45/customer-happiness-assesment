@@ -72,6 +72,9 @@ class AnalyseTranscriptTone implements ShouldQueue
             );
 
             $content = $message->content[0]->text ?? '{}';
+            $content = preg_replace('/^```(?:json)?\s*/m', '', $content);
+            $content = preg_replace('/```\s*$/m', '', $content);
+            $content = trim($content);
             $result  = json_decode($content, true);
 
             if (!is_array($result) || !isset($result['sentiment_score'])) {

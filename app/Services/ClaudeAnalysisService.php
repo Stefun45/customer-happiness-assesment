@@ -130,6 +130,10 @@ PROMPT;
             );
 
             $content = $message->content[0]->text ?? '{}';
+            // Strip markdown code fences Claude sometimes adds despite instructions
+            $content = preg_replace('/^```(?:json)?\s*/m', '', $content);
+            $content = preg_replace('/```\s*$/m', '', $content);
+            $content = trim($content);
             $result = json_decode($content, true);
 
             if (!is_array($result) || !isset($result['score'])) {
