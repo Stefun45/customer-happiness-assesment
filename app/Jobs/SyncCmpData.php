@@ -16,8 +16,8 @@ class SyncCmpData implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $tries = 3;
-    public int $timeout = 1800; // contacts sync adds ~1 API call per client
+    public int $tries   = 3;
+    public int $timeout = 120;
 
     public function handle(CmpService $service): void
     {
@@ -32,15 +32,15 @@ class SyncCmpData implements ShouldQueue
             $synced = $service->syncClients();
             Log::info("CMP: synced {$synced} clients");
 
-            // Sync contacts for each client (for email-based matching in Fireflies etc.)
-            $synced_contacts = 0;
-            Client::query()->each(function (Client $client) use ($service, &$synced_contacts) {
-                $service->syncContacts($client);
-                $synced_contacts++;
+            // Dispatch one contacts-sync job per client so they run in parallel
+            $dispatched = 0;
+            Client::query()->each(function (Client $client) use (&$dispatched) {
+                SyncClientContacts::dispatch($client)->onQueue('default');
+                $dispatched++;
             });
-            Log::info("CMP: synced contacts for {$synced_contacts} clients");
+            Log::info("CMP: dispatched {$dispatched} SyncClientContacts jobs");
 
-            // Trigger happiness re-analysis for all clients
+            // Dispatch happiness re-analysis for each client
             Client::query()->each(function (Client $client) {
                 AnalyseClientHappiness::dispatch($client)->onQueue('default');
             });

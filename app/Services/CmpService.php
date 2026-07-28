@@ -161,19 +161,28 @@ class CmpService
     }
 
     /**
+     * Fetch the raw happiness review list from the CMP API.
+     */
+    public function fetchHappinessReviews(): array
+    {
+        try {
+            $response = $this->http->get('api/customer/happiness');
+            $body     = json_decode($response->getBody()->getContents(), true) ?? [];
+            return $body['customer_happiness'] ?? [];
+        } catch (GuzzleException $e) {
+            Log::error('CMP fetchHappinessReviews failed', ['error' => $e->getMessage()]);
+            return [];
+        }
+    }
+
+    /**
      * Sync customer happiness review submissions from GET /api/customer/happiness.
      * Scores are on a 1–7 scale (1 = worst, 7 = best).
      */
     public function syncHappinessReviews(): int
     {
-        try {
-            $response = $this->http->get('api/customer/happiness');
-            $body     = json_decode($response->getBody()->getContents(), true) ?? [];
-            $reviews  = $body['customer_happiness'] ?? [];
-        } catch (GuzzleException $e) {
-            Log::error('CMP syncHappinessReviews failed', ['error' => $e->getMessage()]);
-            return 0;
-        }
+        $reviews = $this->fetchHappinessReviews();
+        if (empty($reviews)) return 0;
 
         $synced   = 0;
         $skipped  = 0;
@@ -204,7 +213,7 @@ class CmpService
 
             // Last resort: ask Claude to match the email domain to a client name
             if (!$clientId && !empty($review['email_address'])) {
-                $clientId = $this->matchClientByEmail($review['email_address']);
+                $clientId = $this->matchReviewByEmail($review['email_address']);
             }
 
             if (!$clientId) {
@@ -257,7 +266,7 @@ class CmpService
      * Use Claude (Haiku) to match an email address to a client by domain similarity.
      * Only called when company_id is null and no direct email match exists.
      */
-    private function matchClientByEmail(string $email): ?int
+    public function matchReviewByEmail(string $email): ?int
     {
         $apiKey = config('integrations.anthropic.api_key');
         if (!$apiKey) return null;
