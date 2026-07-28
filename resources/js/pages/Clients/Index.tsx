@@ -13,6 +13,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
 import { Users, Search, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 
 interface HappinessScore {
@@ -45,7 +47,7 @@ interface Props {
     meta: Pagination
   }
   show_lost: boolean
-  filters: { search: string; sort: string; direction: string }
+  filters: { search: string; sort: string; direction: string; enterprise: boolean }
 }
 
 function churnBadge(risk: string) {
@@ -68,23 +70,24 @@ const emptyClients = { data: [], meta: { current_page: 1, last_page: 1, per_page
 export default function ClientsIndex({
   clients = emptyClients,
   show_lost = false,
-  filters = { search: '', sort: 'name', direction: 'asc' },
+  filters = { search: '', sort: 'name', direction: 'asc', enterprise: false },
 }: Props) {
   const [search, setSearch] = useState(filters.search)
 
+  function baseParams(overrides: Record<string, unknown> = {}) {
+    return {
+      search:     filters.search || undefined,
+      sort:       filters.sort !== 'name' ? filters.sort : undefined,
+      direction:  filters.direction !== 'asc' ? filters.direction : undefined,
+      lost:       show_lost ? 1 : undefined,
+      enterprise: filters.enterprise ? 1 : undefined,
+      ...overrides,
+    }
+  }
+
   function sortBy(col: string) {
-    const direction =
-      filters.sort === col && filters.direction === 'asc' ? 'desc' : 'asc'
-    router.get(
-      '/clients',
-      {
-        sort: col,
-        direction,
-        search: filters.search || undefined,
-        lost: show_lost ? 1 : undefined,
-      },
-      { preserveState: true, replace: true }
-    )
+    const direction = filters.sort === col && filters.direction === 'asc' ? 'desc' : 'asc'
+    router.get('/clients', baseParams({ sort: col, direction }), { preserveState: true, replace: true })
   }
 
   function SortIcon({ col }: { col: string }) {
@@ -98,11 +101,7 @@ export default function ClientsIndex({
   useEffect(() => {
     const timer = setTimeout(() => {
       if (search !== filters.search) {
-        router.get(
-          '/clients',
-          { search: search || undefined, lost: show_lost ? 1 : undefined },
-          { preserveState: true, replace: true }
-        )
+        router.get('/clients', baseParams({ search: search || undefined, page: undefined }), { preserveState: true, replace: true })
       }
     }, 400)
     return () => clearTimeout(timer)
@@ -112,18 +111,12 @@ export default function ClientsIndex({
     router.get('/clients', show_lost ? {} : { lost: 1 }, { preserveState: false })
   }
 
+  function toggleEnterprise() {
+    router.get('/clients', baseParams({ enterprise: filters.enterprise ? undefined : 1, page: undefined }), { preserveState: true, replace: true })
+  }
+
   function goToPage(page: number) {
-    router.get(
-      '/clients',
-      {
-        page,
-        search: filters.search || undefined,
-        sort: filters.sort !== 'name' ? filters.sort : undefined,
-        direction: filters.direction !== 'asc' ? filters.direction : undefined,
-        lost: show_lost ? 1 : undefined,
-      },
-      { preserveState: true, preserveScroll: true }
-    )
+    router.get('/clients', baseParams({ page }), { preserveState: true, preserveScroll: true })
   }
 
   const filtered = clients.data
@@ -142,10 +135,22 @@ export default function ClientsIndex({
                 {filters.search ? ` matching "${filters.search}"` : ' total'}
               </CardDescription>
             </div>
-            <Button variant={show_lost ? 'default' : 'outline'} onClick={toggleLost}>
-              <Users className="h-4 w-4 mr-2" />
-              {show_lost ? 'View Active' : 'View Lost'}
-            </Button>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="enterprise-filter"
+                  checked={filters.enterprise}
+                  onCheckedChange={toggleEnterprise}
+                />
+                <Label htmlFor="enterprise-filter" className="cursor-pointer text-sm">
+                  Enterprise only
+                </Label>
+              </div>
+              <Button variant={show_lost ? 'default' : 'outline'} onClick={toggleLost}>
+                <Users className="h-4 w-4 mr-2" />
+                {show_lost ? 'View Active' : 'View Lost'}
+              </Button>
+            </div>
           </div>
           <div className="relative mt-4">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />

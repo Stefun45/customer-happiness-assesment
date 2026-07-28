@@ -14,8 +14,9 @@ class ClientController extends Controller
 {
     public function index(Request $request): Response
     {
-        $showLost  = $request->boolean('lost');
-        $search    = $request->string('search')->trim()->toString();
+        $showLost        = $request->boolean('lost');
+        $enterpriseOnly  = $request->boolean('enterprise');
+        $search          = $request->string('search')->trim()->toString();
         $sortBy    = $request->input('sort', 'name');
         $sortDir   = $request->input('direction', 'asc') === 'desc' ? 'desc' : 'asc';
 
@@ -38,6 +39,7 @@ class ClientController extends Controller
         })
         ->when(!$showLost, fn($q) => $q->whereNull('clients.lost_at'))
         ->when($showLost, fn($q) => $q->whereNotNull('clients.lost_at'))
+        ->when($enterpriseOnly, fn($q) => $q->where('clients.is_enterprise', true))
         ->when($search, fn($q) => $q->where(function ($q) use ($search) {
             $q->where('clients.name', 'like', "%{$search}%")
               ->orWhere('clients.company_name', 'like', "%{$search}%")
@@ -80,9 +82,10 @@ class ClientController extends Controller
             ],
             'show_lost' => $showLost,
             'filters'   => [
-                'search'    => $search,
-                'sort'      => $sortBy,
-                'direction' => $sortDir,
+                'search'     => $search,
+                'sort'       => $sortBy,
+                'direction'  => $sortDir,
+                'enterprise' => $enterpriseOnly,
             ],
         ]);
     }

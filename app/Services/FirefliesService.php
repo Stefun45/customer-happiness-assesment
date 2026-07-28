@@ -197,13 +197,19 @@ class FirefliesService
                 ));
             }
 
+            // Fireflies returns date as Unix milliseconds (Float); convert to seconds
+            $rawDate    = $transcript['date'] ?? null;
+            $occurredAt = $rawDate !== null
+                ? date('Y-m-d H:i:s', (int) ($rawDate / 1000))
+                : now()->toDateTimeString();
+
             Communication::updateOrCreate(
                 ['source' => 'fireflies', 'source_id' => $transcript['id']],
                 [
                     'client_id'   => $client->id,
                     'subject'     => $transcript['title'] ?? 'Call recording',
                     'body'        => $body,
-                    'occurred_at' => date('Y-m-d H:i:s', $transcript['date'] ?? time()),
+                    'occurred_at' => $occurredAt,
                     'raw_payload' => $transcript,
                 ]
             );
