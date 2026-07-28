@@ -165,7 +165,11 @@ export default function CommunicationsIndex({
                 </TableHeader>
                 <TableBody>
                   {communications.data.map((comm) => (
-                    <TableRow key={comm.id}>
+                    <TableRow
+                      key={comm.id}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => router.visit(`/communications/${comm.id}`)}
+                    >
                       <TableCell className="font-medium">
                         {comm.client ? (
                           <Link href={`/clients/${comm.client.id}`} className="hover:underline">

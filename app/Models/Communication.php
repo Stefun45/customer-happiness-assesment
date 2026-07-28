@@ -15,6 +15,7 @@ class Communication extends Model
         'body',
         'occurred_at',
         'sentiment_score',
+        'tone_summary',
         'raw_payload',
     ];
 

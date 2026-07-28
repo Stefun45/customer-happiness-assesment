@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\AnalyseTranscriptTone;
 use App\Models\Communication;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -51,5 +53,46 @@ class CommunicationController extends Controller
                 'source' => $source,
             ],
         ]);
+    }
+
+    public function show(Communication $communication): Response
+    {
+        $communication->load('client');
+        $payload = $communication->raw_payload ?? [];
+
+        return Inertia::render('Communications/Show', [
+            'communication' => [
+                'id'              => $communication->id,
+                'source'          => $communication->source,
+                'subject'         => $communication->subject,
+                'body'            => $communication->body,
+                'occurred_at'     => $communication->occurred_at?->toISOString(),
+                'sentiment_score' => $communication->sentiment_score,
+                'tone_summary'    => $communication->tone_summary,
+                'client'          => $communication->client ? [
+                    'id'   => $communication->client->id,
+                    'name' => $communication->client->name,
+                ] : null,
+                // Fireflies-specific structured data from raw_payload
+                'attendees'       => array_map(fn($a) => [
+                    'name'  => $a['displayName'] ?? '',
+                    'email' => $a['email'] ?? '',
+                ], $payload['meeting_attendees'] ?? []),
+                'sentences'       => array_map(fn($s) => [
+                    'speaker' => $s['speaker_name'] ?? '',
+                    'text'    => $s['text'] ?? '',
+                ], $payload['sentences'] ?? []),
+                'duration'        => $payload['duration'] ?? null,
+                'summary'         => $payload['summary']['overview'] ?? null,
+                'action_items'    => $payload['summary']['action_items'] ?? null,
+            ],
+        ]);
+    }
+
+    public function analyse(Communication $communication): RedirectResponse
+    {
+        AnalyseTranscriptTone::dispatch($communication)->onQueue('default');
+
+        return back()->with('success', 'Tone analysis has been queued.');
     }
 }

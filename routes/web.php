@@ -39,6 +39,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/clients/{client}/restore', [ClientController::class, 'restore'])->name('clients.restore');
 
     Route::get('/communications', [CommunicationController::class, 'index'])->name('communications.index');
+    Route::get('/communications/{communication}', [CommunicationController::class, 'show'])->name('communications.show');
+    Route::post('/communications/{communication}/analyse', [CommunicationController::class, 'analyse'])->name('communications.analyse');
     Route::get('/invoices', [InvoiceController::class, 'index'])->name('invoices.index');
 
     Route::post('/sync', [SyncController::class, 'trigger'])->name('sync.trigger');
