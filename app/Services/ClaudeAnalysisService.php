@@ -25,10 +25,20 @@ class ClaudeAnalysisService
      */
     public function analyseClient(Client $client): array
     {
-        $cutoff = now()->subDays(60);
+        $cutoff        = now()->subDays(60);
+        $reviewsCutoff = now()->subDays(30);
 
+        // Happiness reviews scored over last 30 days; all other comms over last 60
         $communications = $client->communications()
-            ->where('occurred_at', '>=', $cutoff)
+            ->where(function ($q) use ($cutoff, $reviewsCutoff) {
+                $q->where(function ($q) use ($reviewsCutoff) {
+                    $q->where('source', 'happiness_review')
+                      ->where('occurred_at', '>=', $reviewsCutoff);
+                })->orWhere(function ($q) use ($cutoff) {
+                    $q->where('source', '!=', 'happiness_review')
+                      ->where('occurred_at', '>=', $cutoff);
+                });
+            })
             ->orderBy('occurred_at', 'desc')
             ->get();
 

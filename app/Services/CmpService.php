@@ -172,8 +172,9 @@ class CmpService
             try {
                 $response = $this->http->get('api/customer/happiness', [
                     'query' => [
-                        'per_page' => 100,
-                        'page'     => $page,
+                        'per_page'  => 100,
+                        'page'      => $page,
+                        'from_date' => now()->subDays(90)->toDateString(),
                     ],
                 ]);
                 $body     = json_decode($response->getBody()->getContents(), true) ?? [];
