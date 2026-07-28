@@ -41,13 +41,26 @@ class ProcessHappinessReview implements ShouldQueue
             }
         }
 
-        if (!$clientId && !empty($review['email_address'])) {
-            $clientId = ClientContact::where('email', strtolower(trim($review['email_address'])))
-                ->value('client_id');
+        $emailAddress = !empty($review['email_address']) ? strtolower(trim($review['email_address'])) : null;
+
+        if (!$clientId && $emailAddress) {
+            $clientId = ClientContact::where('email', $emailAddress)->value('client_id');
         }
 
-        if (!$clientId && !empty($review['email_address'])) {
-            $clientId = $service->matchReviewByEmail($review['email_address']);
+        if (!$clientId && $emailAddress) {
+            $clientId = $service->matchReviewByEmail($emailAddress);
+
+            // Cache the match as a contact so future reviews don't need Claude
+            if ($clientId) {
+                ClientContact::firstOrCreate(
+                    ['client_id' => $clientId, 'email' => $emailAddress],
+                    ['name' => null, 'phone' => null]
+                );
+                Log::info('ProcessHappinessReview: created contact from Claude match', [
+                    'client_id' => $clientId,
+                    'email'     => $emailAddress,
+                ]);
+            }
         }
 
         if (!$clientId) {

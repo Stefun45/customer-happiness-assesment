@@ -165,6 +165,15 @@ class FirefliesService
                     $matched = $this->matchClientByEmail($email);
                     if ($matched) {
                         $client = $matched;
+                        // Cache the match so future transcripts match directly
+                        ClientContact::firstOrCreate(
+                            ['client_id' => $matched->id, 'email' => strtolower(trim($email))],
+                            ['name' => null, 'phone' => null]
+                        );
+                        Log::info('Fireflies: created contact from Claude match', [
+                            'client_id' => $matched->id,
+                            'email'     => $email,
+                        ]);
                         break;
                     }
                 }

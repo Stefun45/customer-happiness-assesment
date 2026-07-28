@@ -63,7 +63,14 @@ class SyncReviews extends Command
             if (!$clientId && $email) {
                 $this->line("  <fg=cyan>Trying Claude match for {$email}...</>");
                 $clientId = $service->matchReviewByEmail($email);
-                if ($clientId) $how = "claude match:{$email}";
+                if ($clientId) {
+                    $how = "claude match:{$email}";
+                    // Cache as a contact so future reviews skip Claude
+                    ClientContact::firstOrCreate(
+                        ['client_id' => $clientId, 'email' => strtolower(trim($email))],
+                        ['name' => null, 'phone' => null]
+                    );
+                }
             }
 
             if (!$clientId) {
