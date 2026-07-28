@@ -27,6 +27,7 @@ interface Client {
   company_name: string
   phone: string | null
   is_new_customer: boolean
+  is_enterprise: boolean
   latest_score: HappinessScore | null
   created_at: string
 }
@@ -215,11 +216,16 @@ export default function ClientsIndex({
                         )}
                       </TableCell>
                       <TableCell>
-                        {client.is_new_customer ? (
-                          <Badge variant="secondary">New</Badge>
-                        ) : (
-                          <Badge variant="outline">Existing</Badge>
-                        )}
+                        <div className="flex gap-1 flex-wrap">
+                          {client.is_enterprise && (
+                            <Badge variant="default">Enterprise</Badge>
+                          )}
+                          {client.is_new_customer ? (
+                            <Badge variant="secondary">New</Badge>
+                          ) : (
+                            <Badge variant="outline">Existing</Badge>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

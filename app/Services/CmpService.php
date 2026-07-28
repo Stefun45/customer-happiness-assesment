@@ -89,6 +89,26 @@ class CmpService
     }
 
     /**
+     * Fetch and store the enterprise flag for a single client.
+     * GET /api/companies/{id}/enterprise → { "success": true, "enterprise": true|false }
+     */
+    public function syncEnterprise(Client $client): void
+    {
+        try {
+            $response  = $this->http->get("api/companies/{$client->id}/enterprise");
+            $body      = json_decode($response->getBody()->getContents(), true) ?? [];
+            $enterprise = (bool) ($body['enterprise'] ?? false);
+
+            $client->update(['is_enterprise' => $enterprise]);
+        } catch (GuzzleException $e) {
+            Log::warning('CMP syncEnterprise failed', [
+                'client_id' => $client->id,
+                'error'     => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
      * Sync contacts for a single client from GET /api/company/{id}/contacts.
      *
      * Assumed response shape (adjust field names to match actual API if different):

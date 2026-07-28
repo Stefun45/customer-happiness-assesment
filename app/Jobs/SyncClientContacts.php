@@ -23,6 +23,7 @@ class SyncClientContacts implements ShouldQueue
     public function handle(CmpService $service): void
     {
         $service->syncContacts($this->client);
+        $service->syncEnterprise($this->client);
     }
 
     public function failed(\Throwable $e): void

@@ -39,6 +39,7 @@ interface Client {
   phone: string | null
   company_name: string
   is_new_customer: boolean
+  is_enterprise: boolean
   freshdesk_id: string | null
   freeagent_contact_id: string | null
   lost_at: string | null
@@ -129,6 +130,7 @@ const emptyClient: Client = {
   phone: null,
   company_name: '',
   is_new_customer: false,
+  is_enterprise: false,
   freshdesk_id: null,
   freeagent_contact_id: null,
   lost_at: null,
@@ -199,6 +201,9 @@ export default function ClientShow({
               <Building className="h-3 w-3" />
               {client.is_new_customer ? 'New customer' : 'Existing customer'}
             </span>
+            {client.is_enterprise && (
+              <Badge variant="default">Enterprise</Badge>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2">

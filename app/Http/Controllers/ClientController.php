@@ -64,7 +64,8 @@ class ClientController extends Controller
                     'company_name' => $client->company_name,
                     'phone' => $client->phone,
                     'is_new_customer' => $client->is_new_customer,
-                    'created_at' => $client->created_at->toISOString(),
+                    'is_enterprise'   => $client->is_enterprise,
+                    'created_at'      => $client->created_at->toISOString(),
                     'latest_score' => $client->happinessScores->first() ? [
                         'score' => $client->happinessScores->first()->score,
                         'churn_risk' => $client->happinessScores->first()->churn_risk,
@@ -163,6 +164,7 @@ class ClientController extends Controller
                 'phone'                => $client->phone,
                 'company_name'         => $client->company_name,
                 'is_new_customer'      => $client->is_new_customer,
+                'is_enterprise'        => $client->is_enterprise,
                 'freshdesk_id'         => $client->freshdesk_id,
                 'freeagent_contact_id' => $client->freeagent_contact_id,
                 'lost_at'              => $client->lost_at?->toISOString(),

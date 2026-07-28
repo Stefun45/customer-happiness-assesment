@@ -20,12 +20,14 @@ class Client extends Model
         'freeagent_contact_id',
         'onboarding_helpdesk_id',
         'is_new_customer',
+        'is_enterprise',
         'lost_at',
         'lost_reason',
     ];
 
     protected $casts = [
         'is_new_customer' => 'boolean',
+        'is_enterprise'   => 'boolean',
         'lost_at'         => 'datetime',
     ];
 
