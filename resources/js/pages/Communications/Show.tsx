@@ -1,10 +1,11 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { Head, Link, router, useForm } from '@inertiajs/react'
 import AppLayout from '@/layouts/AppLayout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Sparkles, Users, Clock } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { ArrowLeft, Sparkles, Users, Clock, LinkIcon } from 'lucide-react'
 
 interface Attendee {
   name: string
@@ -32,8 +33,14 @@ interface Communication {
   action_items: string | null
 }
 
+interface Client {
+  id: number
+  name: string
+}
+
 interface Props {
   communication: Communication
+  clients: Client[]
 }
 
 const sourceLabel: Record<string, string> = {
@@ -84,12 +91,29 @@ const speakerColours = [
   'text-pink-700 dark:text-pink-400',
 ]
 
-export default function CommunicationShow({ communication }: Props) {
+export default function CommunicationShow({ communication, clients }: Props) {
   const { post, processing } = useForm()
+  const [clientSearch, setClientSearch]     = useState('')
+  const [selectedClient, setSelectedClient] = useState<Client | null>(communication.client)
+  const [linking, setLinking]               = useState(false)
 
   function analyse() {
     post(`/communications/${communication.id}/analyse`)
   }
+
+  function linkClient() {
+    if (!selectedClient) return
+    setLinking(true)
+    router.patch(
+      `/communications/${communication.id}/link-client`,
+      { client_id: selectedClient.id },
+      { onFinish: () => setLinking(false) }
+    )
+  }
+
+  const filteredClients = clientSearch.trim().length > 0
+    ? clients.filter(c => c.name.toLowerCase().includes(clientSearch.toLowerCase())).slice(0, 8)
+    : []
 
   const isFireflies  = communication.source === 'fireflies'
   const groups       = isFireflies ? groupSentences(communication.sentences) : []
@@ -229,6 +253,69 @@ export default function CommunicationShow({ communication }: Props) {
                   No analysis yet. Click Analyse to score this {sourceLabel[communication.source] ?? 'communication'} with AI.
                 </p>
               )}
+            </CardContent>
+          </Card>
+
+          {/* Link to client */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <LinkIcon className="h-4 w-4" />
+                Client
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {selectedClient && (
+                <div className="flex items-center justify-between text-sm">
+                  <Link
+                    href={`/clients/${selectedClient.id}`}
+                    className="font-medium hover:underline"
+                  >
+                    {selectedClient.name}
+                  </Link>
+                  <button
+                    onClick={() => setSelectedClient(null)}
+                    className="text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    Change
+                  </button>
+                </div>
+              )}
+              {!selectedClient && (
+                <p className="text-sm text-muted-foreground">No client linked</p>
+              )}
+              <div className="relative">
+                <Input
+                  placeholder="Search clients..."
+                  value={clientSearch}
+                  onChange={e => setClientSearch(e.target.value)}
+                  className="text-sm"
+                />
+                {filteredClients.length > 0 && (
+                  <div className="absolute z-10 mt-1 w-full rounded-md border bg-popover shadow-md">
+                    {filteredClients.map(c => (
+                      <button
+                        key={c.id}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
+                        onClick={() => {
+                          setSelectedClient(c)
+                          setClientSearch('')
+                        }}
+                      >
+                        {c.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <Button
+                size="sm"
+                className="w-full"
+                disabled={!selectedClient || selectedClient.id === communication.client?.id || linking}
+                onClick={linkClient}
+              >
+                {linking ? 'Saving...' : 'Save link'}
+              </Button>
             </CardContent>
           </Card>
 

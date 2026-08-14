@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\AnalyseTranscriptTone;
+use App\Models\Client;
+use App\Models\ClientContact;
 use App\Models\Communication;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -60,7 +62,13 @@ class CommunicationController extends Controller
         $communication->load('client');
         $payload = $communication->raw_payload ?? [];
 
+        $clients = Client::whereNull('lost_at')
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->map(fn($c) => ['id' => $c->id, 'name' => $c->name]);
+
         return Inertia::render('Communications/Show', [
+            'clients' => $clients,
             'communication' => [
                 'id'              => $communication->id,
                 'source'          => $communication->source,
@@ -87,6 +95,25 @@ class CommunicationController extends Controller
                 'action_items'    => $payload['summary']['action_items'] ?? null,
             ],
         ]);
+    }
+
+    public function linkClient(Request $request, Communication $communication): RedirectResponse
+    {
+        $request->validate(['client_id' => 'required|exists:clients,id']);
+
+        $clientId = $request->integer('client_id');
+        $communication->update(['client_id' => $clientId]);
+
+        // If the review has an email, cache it as a contact so future syncs auto-match
+        $email = $communication->raw_payload['email_address'] ?? null;
+        if ($email && $communication->source === 'happiness_review') {
+            ClientContact::firstOrCreate(
+                ['client_id' => $clientId, 'email' => strtolower(trim($email))],
+                ['name' => null, 'phone' => null]
+            );
+        }
+
+        return back()->with('success', 'Client linked successfully.');
     }
 
     public function analyse(Communication $communication): RedirectResponse
