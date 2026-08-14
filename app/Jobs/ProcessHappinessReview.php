@@ -64,12 +64,11 @@ class ProcessHappinessReview implements ShouldQueue
         }
 
         if (!$clientId) {
-            Log::info('ProcessHappinessReview: no client match, skipping', [
+            Log::info('ProcessHappinessReview: no client match, storing unmatched', [
                 'review_id'  => $review['id'],
                 'company_id' => $review['company_id'] ?? null,
                 'email'      => $review['email_address'] ?? null,
             ]);
-            return;
         }
 
         $questionData = [];

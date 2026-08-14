@@ -73,12 +73,6 @@ class SyncReviews extends Command
                 }
             }
 
-            if (!$clientId) {
-                $this->line("  <fg=red>NO MATCH  id:{$id} score:{$score} company_id:" . ($companyId ?? 'null') . " email:" . ($email ?? 'null') . "</>");
-                $skipped++;
-                continue;
-            }
-
             $questionData = [];
             if (!empty($review['question_data'])) {
                 $questionData = json_decode($review['question_data'], true) ?? [];
@@ -100,7 +94,12 @@ class SyncReviews extends Command
                 ]
             );
 
-            $this->line("  <fg=green>STORED    id:{$id} score:{$score} client:{$clientId} via {$how}</>");
+            if ($clientId) {
+                $this->line("  <fg=green>STORED    id:{$id} score:{$score} client:{$clientId} via {$how}</>");
+            } else {
+                $this->line("  <fg=yellow>UNMATCHED id:{$id} score:{$score} company_id:" . ($companyId ?? 'null') . " email:" . ($email ?? 'null') . "</>");
+                $skipped++;
+            }
             $stored++;
         }
 

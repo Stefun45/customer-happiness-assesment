@@ -255,13 +255,11 @@ class CmpService
             }
 
             if (!$clientId) {
-                Log::info('CMP happiness: no client match, skipping', [
-                    'review_id'    => $review['id'],
-                    'company_id'   => $review['company_id'] ?? null,
-                    'email'        => $review['email_address'] ?? null,
+                Log::info('CMP happiness: no client match, storing unmatched', [
+                    'review_id'  => $review['id'],
+                    'company_id' => $review['company_id'] ?? null,
+                    'email'      => $review['email_address'] ?? null,
                 ]);
-                $skipped++;
-                continue;
             }
 
             // Parse question_data JSON string
