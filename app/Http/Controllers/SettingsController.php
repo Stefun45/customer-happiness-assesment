@@ -38,7 +38,7 @@ class SettingsController extends Controller
             ['name' => 'CMP',           'key' => 'cmp',        'configured' => !empty(config('integrations.cmp.api_key'))],
             ['name' => 'Freshdesk',     'key' => 'freshdesk',  'configured' => !empty(config('integrations.freshdesk.api_key'))],
             ['name' => 'Fireflies',     'key' => 'fireflies',  'configured' => !empty(config('integrations.fireflies.api_key'))],
-            ['name' => 'FreeAgent',     'key' => 'freeagent',  'configured' => !empty(config('integrations.freeagent.client_id'))],
+            ['name' => 'FreeAgent',     'key' => 'freeagent',  'configured' => !empty(config('integrations.freeagent_tools.token'))],
             ['name' => 'Anthropic (AI)','key' => 'anthropic',  'configured' => !empty(config('integrations.anthropic.api_key'))],
         ];
 

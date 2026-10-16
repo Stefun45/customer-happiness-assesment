@@ -64,6 +64,7 @@ interface Invoice {
   issued_at: string
   due_at: string
   paid_at: string | null
+  view_url: string | null
 }
 
 interface HappinessScore {
@@ -465,7 +466,20 @@ export default function ClientShow({
                   <TableBody>
                     {invoices.map((inv) => (
                       <TableRow key={inv.id}>
-                        <TableCell className="font-mono">{inv.invoice_number}</TableCell>
+                        <TableCell className="font-mono">
+                          {inv.view_url ? (
+                            <a
+                              href={inv.view_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="underline underline-offset-4 hover:text-primary"
+                            >
+                              {inv.invoice_number}
+                            </a>
+                          ) : (
+                            inv.invoice_number
+                          )}
+                        </TableCell>
                         <TableCell>{formatCurrency(inv.amount_pence, inv.currency)}</TableCell>
                         <TableCell>
                           <Badge

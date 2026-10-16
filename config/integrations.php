@@ -15,11 +15,9 @@ return [
         'api_key' => env('FIREFLIES_API_KEY'),
     ],
 
-    'freeagent' => [
-        'access_token' => env('FREEAGENT_ACCESS_TOKEN'),
-        'refresh_token' => env('FREEAGENT_REFRESH_TOKEN'),
-        'client_id' => env('FREEAGENT_CLIENT_ID'),
-        'client_secret' => env('FREEAGENT_CLIENT_SECRET'),
+    'freeagent_tools' => [
+        'base_url' => env('FREEAGENT_TOOLS_BASE_URL', 'https://freeagent-tools.despatchcloud.com'),
+        'token'    => env('FREEAGENT_TOOLS_TOKEN'),
     ],
 
     'onboarding_helpdesk' => [

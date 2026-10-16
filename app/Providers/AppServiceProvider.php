@@ -5,7 +5,7 @@ namespace App\Providers;
 use App\Services\ClaudeAnalysisService;
 use App\Services\CmpService;
 use App\Services\FirefliesService;
-use App\Services\FreeAgentService;
+use App\Services\FreeAgentToolsService;
 use App\Services\FreshdeskService;
 use App\Services\OnboardingHelpdeskService;
 use Illuminate\Support\ServiceProvider;
@@ -28,8 +28,9 @@ class AppServiceProvider extends ServiceProvider
             apiKey: config('integrations.fireflies.api_key'),
         ));
 
-        $this->app->singleton(FreeAgentService::class, fn() => new FreeAgentService(
-            accessToken: config('integrations.freeagent.access_token'),
+        $this->app->singleton(FreeAgentToolsService::class, fn() => new FreeAgentToolsService(
+            baseUrl: config('integrations.freeagent_tools.base_url'),
+            token:   config('integrations.freeagent_tools.token'),
         ));
 
         $this->app->singleton(OnboardingHelpdeskService::class, fn() => new OnboardingHelpdeskService(

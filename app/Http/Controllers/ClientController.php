@@ -116,6 +116,7 @@ class ClientController extends Controller
                 'issued_at' => $i->issued_at->toISOString(),
                 'due_at' => $i->due_at->toISOString(),
                 'paid_at' => $i->paid_at?->toISOString(),
+                'view_url' => $i->view_url,
             ]);
 
         $scoreHistory = $client->happinessScores()

@@ -14,6 +14,8 @@ class Invoice extends Model
         'amount_pence',
         'currency',
         'status',
+        'product',
+        'view_url',
         'issued_at',
         'due_at',
         'paid_at',
