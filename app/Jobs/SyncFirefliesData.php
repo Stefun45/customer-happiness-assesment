@@ -15,8 +15,10 @@ class SyncFirefliesData implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $tries = 3;
-    public int $timeout = 600;
+    public int $tries = 1;
+    public int $timeout = 1800;
+
+    public function __construct(public bool $full = false) {}
 
     public function handle(FirefliesService $service): void
     {
@@ -28,11 +30,18 @@ class SyncFirefliesData implements ShouldQueue
         try {
             $sync->update(['status' => 'running']);
 
-            $service->syncCalls();
+            $startedAt = now();
+
+            // Incremental from the last successful run, with a day's overlap
+            $since = (!$this->full && $sync->last_synced_at)
+                ? $sync->last_synced_at->copy()->subDay()
+                : null;
+
+            $service->syncCalls($since);
 
             $sync->update([
                 'status' => 'success',
-                'last_synced_at' => now(),
+                'last_synced_at' => $startedAt,
                 'error_message' => null,
             ]);
         } catch (\Throwable $e) {

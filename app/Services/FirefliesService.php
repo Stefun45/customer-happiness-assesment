@@ -7,7 +7,9 @@ use App\Models\Client;
 use App\Models\ClientContact;
 use App\Models\Communication;
 use GuzzleHttp\Client as GuzzleClient;
+use Carbon\Carbon;
 use GuzzleHttp\Exception\GuzzleException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class FirefliesService
@@ -118,24 +120,34 @@ class FirefliesService
      * Sync all calls, matching transcripts to clients via CMP contact emails.
      * Processed one page at a time: transcripts include full sentences, so
      * loading them all at once exhausts memory.
+     *
+     * With $since, stops at the first transcript older than it (Fireflies
+     * returns newest first); without it, re-syncs every transcript.
      */
-    public function syncCalls(int $batchSize = 50): void
+    public function syncCalls(?Carbon $since = null, int $batchSize = 50): void
     {
         $synced  = 0;
         $skipped = 0;
         $skip    = 0;
+        $reachedSince = false;
 
         do {
             $batch = $this->getTranscripts($batchSize, $skip);
 
             foreach ($batch as $transcript) {
+                $date = $transcript['date'] ?? null;
+                if ($since && $date !== null && (int) ($date / 1000) < $since->timestamp) {
+                    $reachedSince = true;
+                    break;
+                }
+
                 $this->storeTranscript($transcript) ? $synced++ : $skipped++;
             }
 
             $skip += $batchSize;
             $fetched = count($batch);
             unset($batch);
-        } while ($fetched === $batchSize);
+        } while ($fetched === $batchSize && !$reachedSince);
 
         Log::info("Fireflies: synced {$synced}, skipped {$skipped} of " . ($synced + $skipped));
     }
@@ -245,7 +257,15 @@ class FirefliesService
         $apiKey = config('integrations.anthropic.api_key');
         if (!$apiKey) return null;
 
-        $domain  = substr($email, strrpos($email, '@') + 1);
+        $domain = strtolower(substr($email, strrpos($email, '@') + 1));
+
+        // Matching is by domain, so ask Claude once per domain (0 = no match)
+        $cacheKey = "fireflies:domain-match:{$domain}";
+        $cached   = Cache::get($cacheKey);
+        if ($cached !== null) {
+            return $cached ? Client::find($cached) : null;
+        }
+
         $clients = Client::select('id', 'name')->get();
         if ($clients->isEmpty()) return null;
 
@@ -267,9 +287,11 @@ class FirefliesService
             );
 
             $answer = trim($message->content[0]->text ?? 'none');
-            if ($answer === 'none' || !ctype_digit($answer)) return null;
+            $client = ctype_digit($answer) ? Client::find((int) $answer) : null;
 
-            return Client::find((int) $answer);
+            Cache::put($cacheKey, $client?->id ?? 0, now()->addDays(30));
+
+            return $client;
         } catch (\Throwable $e) {
             Log::warning('Fireflies matchClientByEmail failed', [
                 'email' => $email,
