@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Invoice;
+use Carbon\Carbon;
 use GuzzleHttp\Client as GuzzleClient;
 use GuzzleHttp\Exception\GuzzleException;
 use Illuminate\Support\Facades\Log;
@@ -131,7 +132,11 @@ class FreeAgentToolsService
             return null;
         }
 
-        $paid = (bool) ($inv['paid'] ?? false);
+        $paid     = (bool) ($inv['paid'] ?? false);
+        $issuedAt = $this->safeDate($inv['dated_on'], $freeagentInvoiceId, 'dated_on');
+        if (!$issuedAt) {
+            return null;
+        }
 
         return Invoice::updateOrCreate(
             ['freeagent_invoice_id' => $freeagentInvoiceId],
@@ -143,10 +148,38 @@ class FreeAgentToolsService
                 'status'         => $status,
                 'product'        => $inv['product'] ?? null,
                 'view_url'       => $inv['view_url'] ?? null,
-                'issued_at'      => $inv['dated_on'],
-                'due_at'         => $inv['due_on'] ?? $inv['dated_on'],
-                'paid_at'        => $paid ? ($inv['paid_on'] ?? now()) : null,
+                'issued_at'      => $issuedAt,
+                'due_at'         => $this->safeDate($inv['due_on'] ?? null, $freeagentInvoiceId, 'due_on') ?? $issuedAt,
+                'paid_at'        => $paid ? ($this->safeDate($inv['paid_on'] ?? null, $freeagentInvoiceId, 'paid_on') ?? now()) : null,
             ]
         );
+    }
+
+    /**
+     * Parse a date, rejecting anything a MySQL timestamp column cannot hold
+     * (FreeAgent data has contained typos such as a due date in 2125).
+     */
+    private function safeDate(?string $value, string $freeagentInvoiceId, string $field): ?Carbon
+    {
+        if (!$value) {
+            return null;
+        }
+
+        try {
+            $date = Carbon::parse($value);
+        } catch (\Throwable) {
+            $date = null;
+        }
+
+        if (!$date || $date->year < 1971 || $date->year > 2037) {
+            Log::warning('FreeAgent Tools: invalid invoice date ignored', [
+                'freeagent_invoice_id' => $freeagentInvoiceId,
+                'field'                => $field,
+                'value'                => $value,
+            ]);
+            return null;
+        }
+
+        return $date;
     }
 }

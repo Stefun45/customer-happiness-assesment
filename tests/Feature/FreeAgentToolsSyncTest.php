@@ -121,4 +121,14 @@ class FreeAgentToolsSyncTest extends TestCase
         $this->assertNull($invoice->fresh()->paid_at);
         $this->assertSame(21060, $invoice->fresh()->amount_pence);
     }
+
+    public function test_out_of_range_due_date_falls_back_to_issue_date(): void
+    {
+        Client::create(['id' => 4242, 'name' => 'Acme', 'company_name' => 'Acme Ltd']);
+        $service = $this->fakeService([]);
+
+        $invoice = $service->storeInvoice(4242, $this->invoice(['due_on' => '2125-10-10']));
+
+        $this->assertSame('2026-10-01', $invoice->due_at->toDateString());
+    }
 }

@@ -66,8 +66,17 @@ class SyncFreeAgentData implements ShouldQueue
                 }
 
                 foreach ($invoices as $inv) {
-                    if ($service->storeInvoice($client->id, $inv)) {
-                        $stored++;
+                    try {
+                        if ($service->storeInvoice($client->id, $inv)) {
+                            $stored++;
+                        }
+                    } catch (\Throwable $e) {
+                        // One bad invoice should not stop the rest syncing
+                        Log::warning('FreeAgent Tools: could not store invoice', [
+                            'client_id'            => $client->id,
+                            'freeagent_invoice_id' => $inv['freeagent_invoice_id'] ?? null,
+                            'error'                => $e->getMessage(),
+                        ]);
                     }
                 }
             });
