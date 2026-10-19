@@ -29,6 +29,9 @@ return [
         'api_key' => env('ANTHROPIC_API_KEY'),
     ],
 
+    // Our own staff domains: never used to match a call or contact to a client
+    'internal_email_domains' => array_filter(array_map('trim', explode(',', env('INTERNAL_EMAIL_DOMAINS', 'thedespatchcompany.com')))),
+
     'alerts' => [
         'account_manager_email' => env('ALERT_EMAIL'),
     ],

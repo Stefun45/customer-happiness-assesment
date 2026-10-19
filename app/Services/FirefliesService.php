@@ -145,7 +145,7 @@ class FirefliesService
      */
     private function storeTranscript(array $transcript): bool
     {
-        $attendeeEmails = array_column($transcript['meeting_attendees'] ?? [], 'email');
+        $attendeeEmails = $this->customerEmails($transcript['meeting_attendees'] ?? []);
 
         // Find the first attendee whose email matches a known client contact
         $client = null;
@@ -216,6 +216,20 @@ class FirefliesService
         );
 
         return true;
+    }
+
+    /**
+     * Attendee emails that could identify a client: blanks and our own staff
+     * domains removed, otherwise every call matches The Despatch Company.
+     */
+    public function customerEmails(array $attendees): array
+    {
+        $internal = array_map('strtolower', config('integrations.internal_email_domains', []));
+
+        return array_values(array_filter(
+            array_map(fn($email) => strtolower(trim((string) $email)), array_column($attendees, 'email')),
+            fn($email) => $email !== '' && !in_array(substr($email, strrpos($email, '@') + 1), $internal, true)
+        ));
     }
 
     /**

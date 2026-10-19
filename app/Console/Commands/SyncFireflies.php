@@ -32,7 +32,7 @@ class SyncFireflies extends Command
 
             foreach ($transcripts as $transcript) {
                 $title  = substr($transcript['title'] ?? 'Untitled', 0, 40);
-                $emails = array_filter(array_column($transcript['meeting_attendees'] ?? [], 'email'));
+                $emails = $service->customerEmails($transcript['meeting_attendees'] ?? []);
 
                 // Direct contact match
                 $client = null;
