@@ -74,23 +74,6 @@ class FirefliesService
     }
 
     /**
-     * Fetch all transcripts by paginating through the Fireflies API.
-     */
-    public function getAllTranscripts(int $batchSize = 50): array
-    {
-        $all  = [];
-        $skip = 0;
-
-        do {
-            $batch = $this->getTranscripts($batchSize, $skip);
-            $all   = array_merge($all, $batch);
-            $skip += $batchSize;
-        } while (count($batch) === $batchSize);
-
-        return $all;
-    }
-
-    /**
      * Fetch a single transcript by ID.
      */
     public function getTranscript(string $id): ?array
@@ -133,90 +116,106 @@ class FirefliesService
 
     /**
      * Sync all calls, matching transcripts to clients via CMP contact emails.
+     * Processed one page at a time: transcripts include full sentences, so
+     * loading them all at once exhausts memory.
      */
-    public function syncCalls(): void
+    public function syncCalls(int $batchSize = 50): void
     {
-        $transcripts = $this->getAllTranscripts();
-        $synced      = 0;
-        $skipped     = 0;
+        $synced  = 0;
+        $skipped = 0;
+        $skip    = 0;
 
-        Log::info('Fireflies: fetched ' . count($transcripts) . ' transcripts total');
+        do {
+            $batch = $this->getTranscripts($batchSize, $skip);
 
-        foreach ($transcripts as $transcript) {
-            $attendeeEmails = array_column($transcript['meeting_attendees'] ?? [], 'email');
+            foreach ($batch as $transcript) {
+                $this->storeTranscript($transcript) ? $synced++ : $skipped++;
+            }
 
-            // Find the first attendee whose email matches a known client contact
-            $client = null;
+            $skip += $batchSize;
+            $fetched = count($batch);
+            unset($batch);
+        } while ($fetched === $batchSize);
+
+        Log::info("Fireflies: synced {$synced}, skipped {$skipped} of " . ($synced + $skipped));
+    }
+
+    /**
+     * Store one transcript against its client. Returns false if no client matched.
+     */
+    private function storeTranscript(array $transcript): bool
+    {
+        $attendeeEmails = array_column($transcript['meeting_attendees'] ?? [], 'email');
+
+        // Find the first attendee whose email matches a known client contact
+        $client = null;
+        foreach ($attendeeEmails as $email) {
+            if (empty($email)) continue;
+            $contact = ClientContact::where('email', strtolower(trim($email)))
+                ->with('client')
+                ->first();
+            if ($contact?->client) {
+                $client = $contact->client;
+                break;
+            }
+        }
+
+        // Claude fallback — try each attendee email against company names/domains
+        if (!$client) {
             foreach ($attendeeEmails as $email) {
                 if (empty($email)) continue;
-                $contact = ClientContact::where('email', strtolower(trim($email)))
-                    ->with('client')
-                    ->first();
-                if ($contact?->client) {
-                    $client = $contact->client;
+                $matched = $this->matchClientByEmail($email);
+                if ($matched) {
+                    $client = $matched;
+                    // Cache the match so future transcripts match directly
+                    ClientContact::firstOrCreate(
+                        ['client_id' => $matched->id, 'email' => strtolower(trim($email))],
+                        ['name' => null, 'phone' => null]
+                    );
+                    Log::info('Fireflies: created contact from Claude match', [
+                        'client_id' => $matched->id,
+                        'email'     => $email,
+                    ]);
                     break;
                 }
             }
-
-            // Claude fallback — try each attendee email against company names/domains
-            if (!$client) {
-                foreach ($attendeeEmails as $email) {
-                    if (empty($email)) continue;
-                    $matched = $this->matchClientByEmail($email);
-                    if ($matched) {
-                        $client = $matched;
-                        // Cache the match so future transcripts match directly
-                        ClientContact::firstOrCreate(
-                            ['client_id' => $matched->id, 'email' => strtolower(trim($email))],
-                            ['name' => null, 'phone' => null]
-                        );
-                        Log::info('Fireflies: created contact from Claude match', [
-                            'client_id' => $matched->id,
-                            'email'     => $email,
-                        ]);
-                        break;
-                    }
-                }
-            }
-
-            if (!$client) {
-                Log::debug('Fireflies: no client match for transcript', [
-                    'id'     => $transcript['id'],
-                    'title'  => $transcript['title'] ?? null,
-                    'emails' => $attendeeEmails,
-                ]);
-                $skipped++;
-                continue;
-            }
-
-            $body = $transcript['summary']['overview'] ?? '';
-            if (empty($body) && !empty($transcript['sentences'])) {
-                $body = implode("\n", array_map(
-                    fn($s) => "[{$s['speaker_name']}] {$s['text']}",
-                    array_slice($transcript['sentences'], 0, 50)
-                ));
-            }
-
-            // Fireflies returns date as Unix milliseconds (Float); convert to seconds
-            $rawDate    = $transcript['date'] ?? null;
-            $occurredAt = $rawDate !== null
-                ? date('Y-m-d H:i:s', (int) ($rawDate / 1000))
-                : now()->toDateTimeString();
-
-            Communication::updateOrCreate(
-                ['source' => 'fireflies', 'source_id' => $transcript['id']],
-                [
-                    'client_id'   => $client->id,
-                    'subject'     => $transcript['title'] ?? 'Call recording',
-                    'body'        => $body,
-                    'occurred_at' => $occurredAt,
-                    'raw_payload' => $transcript,
-                ]
-            );
-            $synced++;
         }
 
-        Log::info("Fireflies: synced {$synced}, skipped {$skipped} of " . count($transcripts));
+        if (!$client) {
+            Log::debug('Fireflies: no client match for transcript', [
+                'id'     => $transcript['id'],
+                'title'  => $transcript['title'] ?? null,
+                'emails' => $attendeeEmails,
+            ]);
+            return false;
+        }
+
+        $body = $transcript['summary']['overview'] ?? '';
+        if (empty($body) && !empty($transcript['sentences'])) {
+            $body = implode("\n", array_map(
+                fn($s) => "[{$s['speaker_name']}] {$s['text']}",
+                array_slice($transcript['sentences'], 0, 50)
+            ));
+        }
+
+        // Fireflies returns date as Unix milliseconds (Float); convert to seconds
+        $rawDate    = $transcript['date'] ?? null;
+        $occurredAt = $rawDate !== null
+            ? date('Y-m-d H:i:s', (int) ($rawDate / 1000))
+            : now()->toDateTimeString();
+
+        Communication::updateOrCreate(
+            ['source' => 'fireflies', 'source_id' => $transcript['id']],
+            [
+                'client_id'   => $client->id,
+                'subject'     => $transcript['title'] ?? 'Call recording',
+                'body'        => $body,
+                'occurred_at' => $occurredAt,
+                'raw_payload' => $transcript,
+            ]
+        );
+
+        return true;
     }
 
     /**

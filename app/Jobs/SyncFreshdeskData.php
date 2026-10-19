@@ -26,6 +26,11 @@ class SyncFreshdeskData implements ShouldQueue
             ['status' => 'pending']
         );
 
+        if (!$service->isConfigured()) {
+            Log::info('SyncFreshdeskData skipped: FRESHDESK_API_KEY or FRESHDESK_DOMAIN not set');
+            return;
+        }
+
         try {
             $sync->update(['status' => 'running']);
 

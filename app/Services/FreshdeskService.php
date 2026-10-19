@@ -10,18 +10,25 @@ use Illuminate\Support\Facades\Log;
 
 class FreshdeskService
 {
-    protected GuzzleClient $http;
+    protected ?GuzzleClient $http = null;
 
     public function __construct(
-        protected string $apiKey,
-        protected string $domain
+        protected ?string $apiKey,
+        protected ?string $domain
     ) {
-        $this->http = new GuzzleClient([
-            'base_uri' => "https://{$domain}.freshdesk.com/api/v2/",
-            'auth'     => [$apiKey, 'X'],
-            'headers'  => ['Content-Type' => 'application/json'],
-            'timeout'  => 30,
-        ]);
+        if ($this->apiKey && $this->domain) {
+            $this->http = new GuzzleClient([
+                'base_uri' => "https://{$domain}.freshdesk.com/api/v2/",
+                'auth'     => [$apiKey, 'X'],
+                'headers'  => ['Content-Type' => 'application/json'],
+                'timeout'  => 30,
+            ]);
+        }
+    }
+
+    public function isConfigured(): bool
+    {
+        return $this->http !== null;
     }
 
     /**
@@ -30,7 +37,7 @@ class FreshdeskService
      */
     public function syncClient(Client $client): int
     {
-        if (!$client->freshdesk_id) {
+        if (!$this->http || !$client->freshdesk_id) {
             return 0;
         }
 
