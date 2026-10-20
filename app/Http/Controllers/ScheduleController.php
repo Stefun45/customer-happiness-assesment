@@ -14,10 +14,11 @@ class ScheduleController extends Controller
     {
         // manager: "me" (default), "all", "unassigned" or a user id
         $manager        = $request->input('manager', 'me');
-        $status         = $request->input('status', 'due');
+        // status: overdue, week (overdue + this week), fortnight (+ next week) or all
+        $status         = $request->input('status', 'week');
         $enterpriseOnly = $request->boolean('enterprise');
 
-        if (!in_array($status, ['overdue', 'due', 'all'], true)) $status = 'due';
+        if (!in_array($status, ['overdue', 'week', 'fortnight', 'all'], true)) $status = 'week';
 
         // ~500 active clients: schedule is computed in PHP so it stays DB-agnostic
         $clients = Client::query()
@@ -54,15 +55,17 @@ class ScheduleController extends Controller
         $summary = [
             'overdue'    => $byManager->where('status', 'overdue')->count(),
             'due'        => $byManager->where('status', 'due')->count(),
+            'upcoming'   => $byManager->where('status', 'upcoming')->count(),
             'scheduled'  => $byManager->where('status', 'scheduled')->count(),
             'unassigned' => $rows->whereNull('account_manager')->count(),
         ];
 
         $visible = $byManager
             ->filter(fn($r) => match ($status) {
-                'overdue' => $r['status'] === 'overdue',
-                'due'     => $r['status'] !== 'scheduled',
-                default   => true,
+                'overdue'   => $r['status'] === 'overdue',
+                'week'      => in_array($r['status'], ['overdue', 'due'], true),
+                'fortnight' => $r['status'] !== 'scheduled',
+                default     => true,
             })
             ->sortBy([['next_due_at', 'asc'], ['name', 'asc']])
             ->values();

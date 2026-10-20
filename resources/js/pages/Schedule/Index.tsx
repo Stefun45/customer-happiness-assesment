@@ -16,7 +16,8 @@ import { AlertTriangle, CalendarClock, CalendarCheck, Building2, UserX } from 'l
 import AccountManagerControl, { UserOption } from '@/components/AccountManagerControl'
 import CompleteContactDialog from '@/components/CompleteContactDialog'
 
-type Status = 'overdue' | 'due' | 'scheduled'
+type Status = 'overdue' | 'due' | 'upcoming' | 'scheduled'
+type StatusFilter = 'overdue' | 'week' | 'fortnight' | 'all'
 
 interface Row {
   id: number
@@ -32,9 +33,9 @@ interface Row {
 
 interface Props {
   rows: Row[]
-  summary: { overdue: number; due: number; scheduled: number; unassigned: number }
+  summary: { overdue: number; due: number; upcoming: number; scheduled: number; unassigned: number }
   users: UserOption[]
-  filters: { manager: string; status: 'overdue' | 'due' | 'all'; enterprise: boolean }
+  filters: { manager: string; status: StatusFilter; enterprise: boolean }
   intervals: { enterprise: number; standard: number }
 }
 
@@ -42,28 +43,33 @@ function formatDate(iso: string | null) {
   return iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : null
 }
 
-function daysFromToday(iso: string) {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  return Math.round((new Date(iso).getTime() - today.getTime()) / (24 * 60 * 60 * 1000))
+// Due dates are the Monday of the due week
+function formatWeek(iso: string) {
+  return `w/c ${new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`
+}
+
+function weeksOverdue(iso: string) {
+  const monday = new Date()
+  monday.setHours(0, 0, 0, 0)
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7))
+  return Math.round((monday.getTime() - new Date(iso).getTime()) / (7 * 24 * 60 * 60 * 1000))
 }
 
 function StatusBadge({ status, dueAt }: { status: Status; dueAt: string }) {
-  const days = daysFromToday(dueAt)
   if (status === 'overdue') {
-    return <Badge variant="destructive">Overdue {Math.abs(days)}d</Badge>
+    const weeks = weeksOverdue(dueAt)
+    return <Badge variant="destructive">Overdue {weeks} {weeks === 1 ? 'week' : 'weeks'}</Badge>
   }
-  if (status === 'due') {
-    return <Badge variant="secondary">{days === 0 ? 'Due today' : `Due in ${days}d`}</Badge>
-  }
-  return <Badge variant="outline">Scheduled</Badge>
+  if (status === 'due') return <Badge variant="secondary">This week</Badge>
+  if (status === 'upcoming') return <Badge variant="outline">Next week</Badge>
+  return <Badge variant="outline" className="text-muted-foreground">Scheduled</Badge>
 }
 
 export default function ScheduleIndex({
   rows = [],
-  summary = { overdue: 0, due: 0, scheduled: 0, unassigned: 0 },
+  summary = { overdue: 0, due: 0, upcoming: 0, scheduled: 0, unassigned: 0 },
   users = [],
-  filters = { manager: 'me', status: 'due', enterprise: false },
+  filters = { manager: 'me', status: 'week', enterprise: false },
   intervals = { enterprise: 1, standard: 4 },
 }: Props) {
   const [completing, setCompleting] = useState<{ id: number; name: string } | null>(null)
@@ -74,16 +80,17 @@ export default function ScheduleIndex({
       '/schedule',
       {
         manager: next.manager !== 'me' ? next.manager : undefined,
-        status: next.status !== 'due' ? next.status : undefined,
+        status: next.status !== 'week' ? next.status : undefined,
         enterprise: next.enterprise ? 1 : undefined,
       },
       { preserveState: true, preserveScroll: true, replace: true }
     )
   }
 
-  const statusOptions: { key: Props['filters']['status']; label: string }[] = [
+  const statusOptions: { key: StatusFilter; label: string }[] = [
     { key: 'overdue', label: 'Overdue' },
-    { key: 'due', label: 'Overdue and due soon' },
+    { key: 'week', label: 'This week' },
+    { key: 'fortnight', label: 'Next 2 weeks' },
     { key: 'all', label: 'All' },
   ]
 
@@ -91,7 +98,7 @@ export default function ScheduleIndex({
     <AppLayout title="Contact Schedule">
       <Head title="Contact Schedule" />
 
-      <div className="grid gap-4 md:grid-cols-3 mb-6">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Overdue</CardTitle>
@@ -99,16 +106,26 @@ export default function ScheduleIndex({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{summary.overdue}</div>
-            <p className="text-xs text-muted-foreground">Past their contact date</p>
+            <p className="text-xs text-muted-foreground">Due week has passed</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Due in the next 14 days</CardTitle>
+            <CardTitle className="text-sm font-medium">Due this week</CardTitle>
             <CalendarClock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{summary.due}</div>
+            <p className="text-xs text-muted-foreground">To contact by Sunday</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Due next week</CardTitle>
+            <CalendarClock className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{summary.upcoming}</div>
             <p className="text-xs text-muted-foreground">{summary.scheduled} further ahead</p>
           </CardContent>
         </Card>
@@ -192,7 +209,7 @@ export default function ScheduleIndex({
                     <TableHead>Account manager</TableHead>
                     <TableHead>Frequency</TableHead>
                     <TableHead>Last contacted</TableHead>
-                    <TableHead>Next due</TableHead>
+                    <TableHead>Due week</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead />
                   </TableRow>
@@ -217,7 +234,7 @@ export default function ScheduleIndex({
                       <TableCell className="text-sm">
                         {formatDate(row.last_contacted_at) ?? <span className="text-muted-foreground">Never</span>}
                       </TableCell>
-                      <TableCell className="text-sm">{formatDate(row.next_due_at)}</TableCell>
+                      <TableCell className="text-sm">{formatWeek(row.next_due_at)}</TableCell>
                       <TableCell>
                         <StatusBadge status={row.status} dueAt={row.next_due_at} />
                       </TableCell>

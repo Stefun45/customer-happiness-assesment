@@ -52,13 +52,15 @@ class ContactScheduleTest extends TestCase
         $standard   = $this->client(['is_enterprise' => false]);
         $last       = Carbon::parse('2026-09-15');
 
-        $this->assertSame('2026-10-15', $enterprise->nextContactDueAt($last)->toDateString());
-        $this->assertSame('2027-01-15', $standard->nextContactDueAt($last)->toDateString());
-        $this->assertSame('2026-10-20', $standard->nextContactDueAt(null)->toDateString(), 'never contacted is due today');
+        // Due weeks are the Monday of the week the interval lands in
+        $this->assertSame('2026-10-12', $enterprise->nextContactDueAt($last)->toDateString());
+        $this->assertSame('2027-01-11', $standard->nextContactDueAt($last)->toDateString());
+        $this->assertSame('2026-10-19', $standard->nextContactDueAt(null)->toDateString(), 'never contacted is due this week');
 
-        $this->assertSame('overdue', Client::contactStatus(Carbon::parse('2026-10-15')));
-        $this->assertSame('due', Client::contactStatus(Carbon::parse('2026-10-30')));
-        $this->assertSame('scheduled', Client::contactStatus(Carbon::parse('2027-01-15')));
+        $this->assertSame('overdue', Client::contactStatus(Carbon::parse('2026-10-12')));
+        $this->assertSame('due', Client::contactStatus(Carbon::parse('2026-10-19')));
+        $this->assertSame('upcoming', Client::contactStatus(Carbon::parse('2026-10-26')));
+        $this->assertSame('scheduled', Client::contactStatus(Carbon::parse('2026-11-02')));
     }
 
     public function test_schedule_lists_my_due_customers_soonest_first(): void
@@ -128,7 +130,7 @@ class ContactScheduleTest extends TestCase
         $log = $client->contactLogs()->first();
         $this->assertSame($call->id, $log->communication_id);
         $this->assertSame($user->id, $log->user_id);
-        $this->assertSame('2027-02-19', $client->nextContactDueAt($log->contacted_at)->toDateString());
+        $this->assertSame('2027-02-15', $client->nextContactDueAt($log->contacted_at)->toDateString());
     }
 
     public function test_notes_can_only_be_deleted_by_their_author_or_an_admin(): void
@@ -168,6 +170,6 @@ class ContactScheduleTest extends TestCase
         $this->assertLessThanOrEqual(1, $dates->map->toDateString()->countBy()->max(), 'no two on the same day');
 
         $this->assertTrue($enterprise->every(fn($c) => $c->fresh()->first_contact_due_at->lt(Carbon::parse('2026-11-20'))));
-        $this->assertSame($risky->fresh()->first_contact_due_at->toDateString(), $risky->fresh()->nextContactDueAt(null)->toDateString());
+        $this->assertSame('2026-10-19', $risky->fresh()->nextContactDueAt(null)->toDateString(), 'shown as its week');
     }
 }

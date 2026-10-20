@@ -57,7 +57,7 @@ interface Schedule {
   interval_months: number
   last_contacted_at: string | null
   next_due_at: string
-  status: 'overdue' | 'due' | 'scheduled'
+  status: 'overdue' | 'due' | 'upcoming' | 'scheduled'
 }
 
 interface ContactLog {
@@ -488,7 +488,7 @@ export default function ClientShow({
                 </div>
                 <div>
                   <p className="text-muted-foreground">Next contact due</p>
-                  <p className="font-medium">{client.lost_at ? 'Not scheduled (lost)' : formatDay(schedule.next_due_at)}</p>
+                  <p className="font-medium">{client.lost_at ? 'Not scheduled (lost)' : `Week commencing ${formatDay(schedule.next_due_at)}`}</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Status</p>
@@ -499,7 +499,7 @@ export default function ClientShow({
                       variant={schedule.status === 'overdue' ? 'destructive' : schedule.status === 'due' ? 'secondary' : 'outline'}
                       className="capitalize"
                     >
-                      {schedule.status === 'due' ? 'Due soon' : schedule.status}
+                      {{ overdue: 'Overdue', due: 'Due this week', upcoming: 'Due next week', scheduled: 'Scheduled' }[schedule.status]}
                     </Badge>
                   )}
                 </div>

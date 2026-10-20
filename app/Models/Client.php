@@ -17,9 +17,6 @@ class Client extends Model
     public const CONTACT_INTERVAL_ENTERPRISE = 1;
     public const CONTACT_INTERVAL_STANDARD   = 4;
 
-    // Contacts due within this many days count as "due soon"
-    public const CONTACT_DUE_SOON_DAYS = 14;
-
     protected $fillable = [
         'id',
         'name',
@@ -90,25 +87,31 @@ class Client extends Model
     }
 
     /**
-     * When the next scheduled contact is due: one interval after the last contact,
-     * or for a client never contacted, their spread first due date (today if unset).
+     * The week (its Monday) the next scheduled contact is due: one interval after
+     * the last contact, or for a client never contacted, the week of their spread
+     * first due date (this week if unset).
      */
     public function nextContactDueAt(?CarbonInterface $lastContactedAt): Carbon
     {
-        if ($lastContactedAt) {
-            return Carbon::parse($lastContactedAt)->startOfDay()->addMonthsNoOverflow($this->contactIntervalMonths());
-        }
+        $due = match (true) {
+            $lastContactedAt !== null           => Carbon::parse($lastContactedAt)->addMonthsNoOverflow($this->contactIntervalMonths()),
+            $this->first_contact_due_at !== null => Carbon::parse($this->first_contact_due_at),
+            default                             => today(),
+        };
 
-        return $this->first_contact_due_at ? Carbon::parse($this->first_contact_due_at)->startOfDay() : today();
+        return $due->startOfWeek(Carbon::MONDAY);
     }
 
     /**
-     * overdue, due (today or within CONTACT_DUE_SOON_DAYS) or scheduled.
+     * overdue (due week has ended), due (this week), upcoming (next week) or scheduled.
      */
-    public static function contactStatus(CarbonInterface $dueAt): string
+    public static function contactStatus(CarbonInterface $dueWeek): string
     {
-        if ($dueAt->lt(today())) return 'overdue';
-        if ($dueAt->lte(today()->addDays(self::CONTACT_DUE_SOON_DAYS))) return 'due';
+        $thisWeek = today()->startOfWeek(Carbon::MONDAY);
+
+        if ($dueWeek->lt($thisWeek)) return 'overdue';
+        if ($dueWeek->equalTo($thisWeek)) return 'due';
+        if ($dueWeek->equalTo($thisWeek->copy()->addWeek())) return 'upcoming';
         return 'scheduled';
     }
 
