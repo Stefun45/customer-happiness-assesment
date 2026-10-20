@@ -2,10 +2,13 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ClientController;
+use App\Http\Controllers\ClientNoteController;
 use App\Http\Controllers\CommunicationController;
+use App\Http\Controllers\ContactLogController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\InvoiceController;
+use App\Http\Controllers\ScheduleController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\SsoController;
 use App\Http\Controllers\SyncController;
@@ -37,6 +40,15 @@ Route::middleware('auth')->group(function () {
     Route::post('/clients/{client}/analyse', [ClientController::class, 'analyse'])->name('clients.analyse');
     Route::post('/clients/{client}/mark-as-lost', [ClientController::class, 'markAsLost'])->name('clients.mark-as-lost');
     Route::post('/clients/{client}/restore', [ClientController::class, 'restore'])->name('clients.restore');
+    Route::patch('/clients/{client}/account-manager', [ClientController::class, 'updateAccountManager'])->name('clients.account-manager');
+
+    Route::get('/schedule', [ScheduleController::class, 'index'])->name('schedule.index');
+    Route::get('/clients/{client}/fireflies-calls', [ContactLogController::class, 'calls'])->name('clients.fireflies-calls');
+    Route::post('/clients/{client}/contacts', [ContactLogController::class, 'store'])->name('clients.contacts.store');
+    Route::delete('/contact-logs/{contactLog}', [ContactLogController::class, 'destroy'])->name('contact-logs.destroy');
+
+    Route::post('/clients/{client}/notes', [ClientNoteController::class, 'store'])->name('clients.notes.store');
+    Route::delete('/notes/{note}', [ClientNoteController::class, 'destroy'])->name('notes.destroy');
 
     Route::get('/communications', [CommunicationController::class, 'index'])->name('communications.index');
     Route::get('/communications/{communication}', [CommunicationController::class, 'show'])->name('communications.show');

@@ -3,6 +3,7 @@ import { Link, router, usePage } from '@inertiajs/react'
 import {
   LayoutDashboard,
   Users,
+  CalendarCheck,
   MessageSquare,
   Receipt,
   Settings,
@@ -27,6 +28,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { label: 'Dashboard',      href: '/dashboard',      icon: LayoutDashboard },
   { label: 'Clients',        href: '/clients',         icon: Users },
+  { label: 'Schedule',       href: '/schedule',        icon: CalendarCheck },
   { label: 'Communications', href: '/communications',  icon: MessageSquare },
   { label: 'Invoices',       href: '/invoices',        icon: Receipt },
   { label: 'Settings',       href: '/settings',        icon: Settings, adminOnly: true },

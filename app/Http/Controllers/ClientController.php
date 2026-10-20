@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Jobs\AnalyseClientHappiness;
 use App\Models\Client;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -134,6 +135,26 @@ class ClientController extends Controller
 
         $latestScore = $scoreHistory->last();
 
+        $contactLogs = $client->contactLogs()
+            ->with(['user:id,name', 'communication:id,subject,occurred_at'])
+            ->orderByDesc('contacted_at')
+            ->orderByDesc('id')
+            ->get();
+
+        $lastContactedAt = $contactLogs->first()?->contacted_at;
+        $nextDueAt       = $client->nextContactDueAt($lastContactedAt);
+
+        $notes = $client->notes()
+            ->with('user:id,name')
+            ->latest()
+            ->get()
+            ->map(fn($n) => [
+                'id'         => $n->id,
+                'body'       => $n->body,
+                'user'       => $n->user ? ['id' => $n->user->id, 'name' => $n->user->name] : null,
+                'created_at' => $n->created_at->toISOString(),
+            ]);
+
         // Load contacts and check which have submitted happiness reviews
         $contacts = $client->contacts()->orderBy('name')->get();
         $reviews  = $client->communications()
@@ -173,13 +194,59 @@ class ClientController extends Controller
                 'freeagent_contact_id' => $client->freeagent_contact_id,
                 'lost_at'              => $client->lost_at?->toISOString(),
                 'lost_reason'          => $client->lost_reason,
+                'account_manager'      => $client->accountManager ? ['id' => $client->accountManager->id, 'name' => $client->accountManager->name] : null,
             ],
+            'schedule' => [
+                'interval_months'   => $client->contactIntervalMonths(),
+                'last_contacted_at' => $lastContactedAt?->toDateString(),
+                'next_due_at'       => $nextDueAt->toDateString(),
+                'status'            => Client::contactStatus($nextDueAt),
+            ],
+            'contact_logs' => $contactLogs->map(fn($l) => [
+                'id'            => $l->id,
+                'contacted_at'  => $l->contacted_at->toDateString(),
+                'notes'         => $l->notes,
+                'user'          => $l->user ? ['id' => $l->user->id, 'name' => $l->user->name] : null,
+                'communication' => $l->communication ? [
+                    'id'          => $l->communication->id,
+                    'subject'     => $l->communication->subject,
+                    'occurred_at' => $l->communication->occurred_at?->toISOString(),
+                ] : null,
+            ]),
+            'notes'          => $notes,
+            'fireflies_calls' => ContactLogController::firefliesCalls($client),
+            'users'          => User::orderBy('name')->get(['id', 'name']),
             'communications' => $communications,
             'invoices'       => $invoices,
             'latest_score'   => $latestScore,
             'score_history'  => $scoreHistory,
             'contacts'       => $mappedContacts,
         ]);
+    }
+
+    /**
+     * Admins can assign anyone; everyone else can only assign themselves or unassign themselves.
+     */
+    public function updateAccountManager(Request $request, Client $client): RedirectResponse
+    {
+        $request->validate(['account_manager_id' => 'nullable|integer|exists:users,id']);
+
+        $user  = $request->user();
+        $newId = $request->input('account_manager_id') !== null ? $request->integer('account_manager_id') : null;
+
+        if (!$user->isAdmin()) {
+            $assigningSelf    = $newId === $user->id;
+            $unassigningSelf  = $newId === null && $client->account_manager_id === $user->id;
+            abort_unless($assigningSelf || $unassigningSelf, 403, 'You can only assign customers to yourself.');
+        }
+
+        $client->update(['account_manager_id' => $newId]);
+
+        $name = $newId ? User::find($newId)->name : null;
+
+        return back()->with('success', $name
+            ? "{$client->name} is now managed by {$name}."
+            : "{$client->name} no longer has an account manager.");
     }
 
     public function analyse(Client $client): RedirectResponse

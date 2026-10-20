@@ -1,6 +1,8 @@
 import React from 'react'
-import { Head, router } from '@inertiajs/react'
+import { Head, Link, router, usePage } from '@inertiajs/react'
 import AppLayout from '@/layouts/AppLayout'
+import AccountManagerControl, { UserOption } from '@/components/AccountManagerControl'
+import CompleteContactDialog, { FirefliesCall } from '@/components/CompleteContactDialog'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -30,6 +32,10 @@ import {
   RotateCcw,
   Users,
   Star,
+  CalendarCheck,
+  StickyNote,
+  Trash2,
+  Video,
 } from 'lucide-react'
 
 interface Client {
@@ -44,6 +50,29 @@ interface Client {
   freeagent_contact_id: string | null
   lost_at: string | null
   lost_reason: string | null
+  account_manager: UserOption | null
+}
+
+interface Schedule {
+  interval_months: number
+  last_contacted_at: string | null
+  next_due_at: string
+  status: 'overdue' | 'due' | 'scheduled'
+}
+
+interface ContactLog {
+  id: number
+  contacted_at: string
+  notes: string | null
+  user: UserOption | null
+  communication: { id: number; subject: string | null; occurred_at: string | null } | null
+}
+
+interface Note {
+  id: number
+  body: string
+  user: UserOption | null
+  created_at: string
 }
 
 interface Communication {
@@ -96,6 +125,15 @@ interface Props {
   latest_score: HappinessScore | null
   score_history: HappinessScore[]
   contacts: Contact[]
+  schedule: Schedule
+  contact_logs: ContactLog[]
+  notes: Note[]
+  fireflies_calls: FirefliesCall[]
+  users: UserOption[]
+}
+
+function formatDay(iso: string | null) {
+  return iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : null
 }
 
 function sourceBadge(source: string) {
@@ -136,6 +174,7 @@ const emptyClient: Client = {
   freeagent_contact_id: null,
   lost_at: null,
   lost_reason: null,
+  account_manager: null,
 }
 
 export default function ClientShow({
@@ -145,7 +184,38 @@ export default function ClientShow({
   latest_score = null,
   score_history = [],
   contacts = [],
+  schedule = { interval_months: 4, last_contacted_at: null, next_due_at: new Date().toISOString(), status: 'overdue' },
+  contact_logs = [],
+  notes = [],
+  fireflies_calls = [],
+  users = [],
 }: Props) {
+  const { auth } = usePage<{ auth: { user: { id: number; role: string } | null } }>().props
+  const canDelete = (owner: UserOption | null) => auth.user?.role === 'admin' || owner?.id === auth.user?.id
+  const [completingContact, setCompletingContact] = React.useState(false)
+  const [noteBody, setNoteBody] = React.useState('')
+  const [savingNote, setSavingNote] = React.useState(false)
+
+  function addNote(e: React.FormEvent) {
+    e.preventDefault()
+    if (!noteBody.trim()) return
+    setSavingNote(true)
+    router.post(`/clients/${client.id}/notes`, { body: noteBody }, {
+      preserveScroll: true,
+      onSuccess: () => setNoteBody(''),
+      onFinish: () => setSavingNote(false),
+    })
+  }
+
+  function deleteNote(id: number) {
+    if (confirm('Delete this note?')) router.delete(`/notes/${id}`, { preserveScroll: true })
+  }
+
+  function deleteContactLog(id: number) {
+    if (confirm('Remove this completed contact? The schedule will be recalculated.')) {
+      router.delete(`/contact-logs/${id}`, { preserveScroll: true })
+    }
+  }
   const [analysing, setAnalysing] = React.useState(false)
   const [lostReason, setLostReason] = React.useState('')
   const [showLostForm, setShowLostForm] = React.useState(false)
@@ -206,6 +276,10 @@ export default function ClientShow({
               <Badge variant="default">Enterprise</Badge>
             )}
           </div>
+          <div className="flex items-center gap-2 mt-3 text-sm">
+            <span className="text-muted-foreground">Account manager:</span>
+            <AccountManagerControl clientId={client.id} current={client.account_manager} users={users} />
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {client.lost_at ? (
@@ -237,6 +311,12 @@ export default function ClientShow({
               )}
             </>
           )}
+          {!client.lost_at && (
+            <Button variant="outline" onClick={() => setCompletingContact(true)}>
+              <CalendarCheck className="h-4 w-4 mr-2" />
+              Mark contacted
+            </Button>
+          )}
           <Button onClick={triggerAnalysis} disabled={analysing}>
             <RefreshCw className={`h-4 w-4 mr-2 ${analysing ? 'animate-spin' : ''}`} />
             {analysing ? 'Analysing...' : 'Run AI Analysis'}
@@ -247,6 +327,12 @@ export default function ClientShow({
       <Tabs defaultValue="overview">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="account">
+            Account
+            {schedule.status === 'overdue' && !client.lost_at && (
+              <Badge variant="destructive" className="ml-2 text-xs">Overdue</Badge>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="communications">
             Communications
             {communications.length > 0 && (
@@ -382,6 +468,134 @@ export default function ClientShow({
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+
+        {/* ACCOUNT TAB: contact schedule, history and notes */}
+        <TabsContent value="account" className="space-y-4 mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Contact schedule</CardTitle>
+              <CardDescription>
+                {client.is_enterprise ? 'Enterprise customer: ' : ''}
+                contact {schedule.interval_months === 1 ? 'every month' : `every ${schedule.interval_months} months`}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 sm:grid-cols-3 text-sm">
+                <div>
+                  <p className="text-muted-foreground">Last contacted</p>
+                  <p className="font-medium">{formatDay(schedule.last_contacted_at) ?? 'Never'}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Next contact due</p>
+                  <p className="font-medium">{client.lost_at ? 'Not scheduled (lost)' : formatDay(schedule.next_due_at)}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Status</p>
+                  {client.lost_at ? (
+                    <Badge variant="outline">Lost</Badge>
+                  ) : (
+                    <Badge
+                      variant={schedule.status === 'overdue' ? 'destructive' : schedule.status === 'due' ? 'secondary' : 'outline'}
+                      className="capitalize"
+                    >
+                      {schedule.status === 'due' ? 'Due soon' : schedule.status}
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Contact history</CardTitle>
+              <CardDescription>Completed scheduled contacts</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {contact_logs.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <CalendarCheck className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                  <p>No contacts recorded yet.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {contact_logs.map((log) => (
+                    <div key={log.id} className="border-l-2 border-primary pl-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="text-sm">
+                          <span className="font-medium">{formatDay(log.contacted_at)}</span>
+                          <span className="text-muted-foreground"> by {log.user?.name ?? 'a removed user'}</span>
+                        </div>
+                        {canDelete(log.user) && (
+                          <Button variant="ghost" size="sm" onClick={() => deleteContactLog(log.id)} title="Remove">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                      {log.communication && (
+                        <Link
+                          href={`/communications/${log.communication.id}`}
+                          className="inline-flex items-center gap-1 text-sm text-primary hover:underline mt-1"
+                        >
+                          <Video className="h-3.5 w-3.5" />
+                          {log.communication.subject ?? 'Fireflies call'}
+                          {log.communication.occurred_at && ` (${formatDay(log.communication.occurred_at)})`}
+                        </Link>
+                      )}
+                      {log.notes && <p className="text-sm mt-1 whitespace-pre-wrap">{log.notes}</p>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Notes</CardTitle>
+              <CardDescription>Shared notes about this customer</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <form onSubmit={addNote} className="space-y-2">
+                <textarea
+                  className="w-full border rounded-md px-3 py-2 text-sm bg-background resize-y"
+                  rows={3}
+                  placeholder="Add a note..."
+                  value={noteBody}
+                  onChange={(e) => setNoteBody(e.target.value)}
+                />
+                <div className="flex justify-end">
+                  <Button type="submit" size="sm" disabled={savingNote || !noteBody.trim()}>
+                    <StickyNote className="h-4 w-4 mr-2" />
+                    {savingNote ? 'Saving...' : 'Add note'}
+                  </Button>
+                </div>
+              </form>
+              {notes.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">No notes yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {notes.map((note) => (
+                    <div key={note.id} className="rounded-md border p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-xs text-muted-foreground">
+                          {note.user?.name ?? 'A removed user'} -{' '}
+                          {new Date(note.created_at).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}
+                        </p>
+                        {canDelete(note.user) && (
+                          <Button variant="ghost" size="sm" onClick={() => deleteNote(note.id)} title="Delete note">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                      <p className="text-sm mt-1 whitespace-pre-wrap">{note.body}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* COMMUNICATIONS TAB */}
@@ -672,6 +886,12 @@ export default function ClientShow({
           )}
         </TabsContent>
       </Tabs>
+
+      <CompleteContactDialog
+        client={completingContact ? { id: client.id, name: client.name } : null}
+        calls={fireflies_calls}
+        onOpenChange={setCompletingContact}
+      />
     </AppLayout>
   )
 }
