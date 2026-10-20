@@ -24,7 +24,7 @@ class ScheduleController extends Controller
             ->whereNull('lost_at')
             ->with('accountManager:id,name')
             ->withMax('contactLogs', 'contacted_at')
-            ->get(['id', 'name', 'company_name', 'is_enterprise', 'account_manager_id']);
+            ->get(['id', 'name', 'company_name', 'is_enterprise', 'account_manager_id', 'first_contact_due_at']);
 
         $rows = $clients->map(function (Client $client) {
             $last  = $client->contact_logs_max_contacted_at ? \Carbon\Carbon::parse($client->contact_logs_max_contacted_at) : null;

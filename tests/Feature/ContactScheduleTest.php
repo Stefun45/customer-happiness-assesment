@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\Client;
 use App\Models\Communication;
 use App\Models\User;
+use App\Services\ContactScheduleService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -24,9 +26,11 @@ class ContactScheduleTest extends TestCase
             '2026_07_27_114235_add_lost_fields_to_clients_table.php',
             '2026_07_28_100000_add_is_enterprise_to_clients_table.php',
             '2025_05_22_100002_create_communications_table.php',
+            '2025_05_22_100004_create_happiness_scores_table.php',
             '2026_10_20_000001_add_account_manager_to_clients_table.php',
             '2026_10_20_000002_create_contact_logs_table.php',
             '2026_10_20_000003_create_client_notes_table.php',
+            '2026_10_20_000004_add_first_contact_due_at_to_clients_table.php',
         ] as $migration) {
             Artisan::call('migrate', ['--path' => "database/migrations/{$migration}"]);
         }
@@ -140,5 +144,30 @@ class ContactScheduleTest extends TestCase
         $this->actingAs($other)->delete("/notes/{$note->id}")->assertForbidden();
         $this->actingAs($admin)->delete("/notes/{$note->id}")->assertRedirect();
         $this->assertSame(0, $client->notes()->count());
+    }
+
+    public function test_first_contacts_are_spread_over_weekdays_of_the_interval_riskiest_first(): void
+    {
+        $standard = collect(range(1, 40))->map(fn($n) => $this->client(['name' => sprintf('Standard %02d', $n)]));
+        $risky    = $this->client(['name' => 'Zzz At Risk']);
+        DB::table('happiness_scores')->insert(['client_id' => $risky->id, 'score' => 2, 'churn_risk' => 'high', 'analysis_summary' => '', 'key_concerns' => '[]', 'recommended_actions' => '[]', 'scored_at' => now(), 'created_at' => now(), 'updated_at' => now()]);
+        $enterprise = collect(range(1, 5))->map(fn($n) => $this->client(['name' => "Enterprise {$n}", 'is_enterprise' => true]));
+        $contacted  = $this->client();
+        $contacted->contactLogs()->create(['contacted_at' => '2026-10-01']);
+
+        $count = app(ContactScheduleService::class)->spreadFirstContacts();
+
+        $this->assertSame(46, $count);
+        $this->assertNull($contacted->fresh()->first_contact_due_at);
+        $this->assertSame('2026-10-20', $risky->fresh()->first_contact_due_at->toDateString(), 'high churn risk goes first');
+
+        $dates = $standard->map(fn($c) => $c->fresh()->first_contact_due_at);
+        $this->assertTrue($dates->every(fn($d) => $d->isWeekday()));
+        $this->assertTrue($dates->max()->lt(Carbon::parse('2027-02-20')));
+        $this->assertGreaterThanOrEqual(3, $dates->map->month->unique()->count(), 'spread over the months');
+        $this->assertLessThanOrEqual(1, $dates->map->toDateString()->countBy()->max(), 'no two on the same day');
+
+        $this->assertTrue($enterprise->every(fn($c) => $c->fresh()->first_contact_due_at->lt(Carbon::parse('2026-11-20'))));
+        $this->assertSame($risky->fresh()->first_contact_due_at->toDateString(), $risky->fresh()->nextContactDueAt(null)->toDateString());
     }
 }

@@ -32,6 +32,7 @@ class Client extends Model
         'is_new_customer',
         'is_enterprise',
         'account_manager_id',
+        'first_contact_due_at',
         'lost_at',
         'lost_reason',
     ];
@@ -40,6 +41,7 @@ class Client extends Model
         'is_new_customer' => 'boolean',
         'is_enterprise'   => 'boolean',
         'lost_at'         => 'datetime',
+        'first_contact_due_at' => 'date',
     ];
 
     public function communications(): HasMany
@@ -88,13 +90,16 @@ class Client extends Model
     }
 
     /**
-     * When the next scheduled contact is due. A client never contacted is due today.
+     * When the next scheduled contact is due: one interval after the last contact,
+     * or for a client never contacted, their spread first due date (today if unset).
      */
     public function nextContactDueAt(?CarbonInterface $lastContactedAt): Carbon
     {
-        return $lastContactedAt
-            ? Carbon::parse($lastContactedAt)->startOfDay()->addMonthsNoOverflow($this->contactIntervalMonths())
-            : today();
+        if ($lastContactedAt) {
+            return Carbon::parse($lastContactedAt)->startOfDay()->addMonthsNoOverflow($this->contactIntervalMonths());
+        }
+
+        return $this->first_contact_due_at ? Carbon::parse($this->first_contact_due_at)->startOfDay() : today();
     }
 
     /**
