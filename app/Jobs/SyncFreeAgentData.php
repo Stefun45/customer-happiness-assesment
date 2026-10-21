@@ -30,7 +30,14 @@ class SyncFreeAgentData implements ShouldQueue
     public int $tries   = 1;
     public int $timeout = 1800;
 
-    public function __construct(public bool $full = false) {}
+    // Declared with a default (not constructor-promoted) so jobs queued before
+    // this property existed still unserialise with it set
+    public bool $full = false;
+
+    public function __construct(bool $full = false)
+    {
+        $this->full = $full;
+    }
 
     public function handle(FreeAgentToolsService $service): void
     {

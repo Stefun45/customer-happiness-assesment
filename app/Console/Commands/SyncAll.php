@@ -8,6 +8,7 @@ use App\Jobs\SyncFreeAgentData;
 use App\Jobs\SyncFreshdeskData;
 use App\Jobs\SyncHappinessReviews;
 use App\Jobs\SyncOnboardingHelpdesk;
+use App\Models\IntegrationSync;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
 
@@ -42,6 +43,12 @@ class SyncAll extends Command
         $this->info('All sync jobs dispatched successfully.');
 
         Cache::put('last_synced_at', now()->toISOString(), 60 * 24 * 7);
+
+        // Also in the database: the cache may not be shared between servers
+        IntegrationSync::updateOrCreate(
+            ['source' => 'sync_all'],
+            ['status' => 'success', 'last_synced_at' => now(), 'error_message' => null]
+        );
 
         return Command::SUCCESS;
     }
