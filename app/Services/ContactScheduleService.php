@@ -13,7 +13,8 @@ class ContactScheduleService
 
     /**
      * Give active clients that have never been contacted a first due date,
-     * spread evenly over the weekdays of their contact interval so they don't
+     * spread evenly over the weekdays of their contact interval from the
+     * schedule start so they don't
      * all fall due at once. Highest churn risk goes first.
      *
      * Only clients without a first due date are scheduled unless $force.
@@ -42,7 +43,8 @@ class ContactScheduleService
             if ($clients->isEmpty()) continue;
 
             $months = $enterprise ? Client::CONTACT_INTERVAL_ENTERPRISE : Client::CONTACT_INTERVAL_STANDARD;
-            $days   = $this->weekdays(today(), today()->addMonthsNoOverflow($months));
+            $start  = Client::contactScheduleStart();
+            $days   = $this->weekdays($start, $start->copy()->addMonthsNoOverflow($months));
 
             foreach ($clients as $i => $client) {
                 $client->update(['first_contact_due_at' => $days[intdiv($i * $days->count(), $clients->count())]]);

@@ -29,6 +29,9 @@ return [
         'api_key' => env('ANTHROPIC_API_KEY'),
     ],
 
+    // No scheduled contact falls due before this date (YYYY-MM-DD)
+    'contact_schedule_starts_on' => env('CONTACT_SCHEDULE_STARTS_ON', '2026-11-03'),
+
     // Our own staff domains: never used to match a call or contact to a client
     'internal_email_domains' => array_filter(array_map('trim', explode(',', env('INTERNAL_EMAIL_DOMAINS', 'thedespatchcompany.com')))),
 

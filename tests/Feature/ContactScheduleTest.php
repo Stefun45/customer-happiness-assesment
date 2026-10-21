@@ -56,7 +56,7 @@ class ContactScheduleTest extends TestCase
         // Due weeks are the Monday of the week the interval lands in
         $this->assertSame('2026-10-12', $enterprise->nextContactDueAt($last)->toDateString());
         $this->assertSame('2027-01-11', $standard->nextContactDueAt($last)->toDateString());
-        $this->assertSame('2026-10-19', $standard->nextContactDueAt(null)->toDateString(), 'never contacted is due this week');
+        $this->assertSame('2026-11-02', $standard->nextContactDueAt(null)->toDateString(), 'never contacted is due from the schedule start');
 
         $this->assertSame('overdue', Client::contactStatus(Carbon::parse('2026-10-12')));
         $this->assertSame('due', Client::contactStatus(Carbon::parse('2026-10-19')));
@@ -79,11 +79,10 @@ class ContactScheduleTest extends TestCase
 
         $this->actingAs($me)->get('/schedule')->assertInertia(fn(Assert $page) => $page
             ->component('Schedule/Index', false)
-            ->has('rows', 2)
+            ->has('rows', 1)
             ->where('rows.0.id', $overdue->id)
             ->where('rows.0.status', 'overdue')
-            ->where('rows.1.id', $never->id)
-            ->where('summary.scheduled', 1)
+            ->where('summary.scheduled', 2)
         );
     }
 
@@ -193,15 +192,24 @@ class ContactScheduleTest extends TestCase
 
         $this->assertSame(46, $count);
         $this->assertNull($contacted->fresh()->first_contact_due_at);
-        $this->assertSame('2026-10-20', $risky->fresh()->first_contact_due_at->toDateString(), 'high churn risk goes first');
+        $this->assertSame('2026-11-03', $risky->fresh()->first_contact_due_at->toDateString(), 'high churn risk goes first, from the schedule start');
 
         $dates = $standard->map(fn($c) => $c->fresh()->first_contact_due_at);
-        $this->assertTrue($dates->every(fn($d) => $d->isWeekday()));
-        $this->assertTrue($dates->max()->lt(Carbon::parse('2027-02-20')));
+        $this->assertTrue($dates->every(fn($d) => $d->isWeekday() && $d->gte(Carbon::parse('2026-11-03'))));
+        $this->assertTrue($dates->max()->lt(Carbon::parse('2027-03-03')));
         $this->assertGreaterThanOrEqual(3, $dates->map->month->unique()->count(), 'spread over the months');
         $this->assertLessThanOrEqual(1, $dates->map->toDateString()->countBy()->max(), 'no two on the same day');
 
-        $this->assertTrue($enterprise->every(fn($c) => $c->fresh()->first_contact_due_at->lt(Carbon::parse('2026-11-20'))));
-        $this->assertSame('2026-10-19', $risky->fresh()->nextContactDueAt(null)->toDateString(), 'shown as its week');
+        $this->assertTrue($enterprise->every(fn($c) => $c->fresh()->first_contact_due_at->lt(Carbon::parse('2026-12-03'))));
+        $this->assertSame('2026-11-02', $risky->fresh()->nextContactDueAt(null)->toDateString(), 'shown as its week');
+    }
+
+    public function test_schedule_start_does_not_hold_back_dates_once_passed(): void
+    {
+        Carbon::setTestNow('2026-12-10 09:00:00');
+        $client = $this->client();
+
+        $this->assertSame('2026-12-10', Client::contactScheduleStart()->toDateString());
+        $this->assertSame('2026-12-07', $client->nextContactDueAt(null)->toDateString());
     }
 }

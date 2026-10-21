@@ -89,17 +89,28 @@ class Client extends Model
     /**
      * The week (its Monday) the next scheduled contact is due: one interval after
      * the last contact, or for a client never contacted, the week of their spread
-     * first due date (this week if unset).
+     * first due date (the schedule start if unset).
      */
     public function nextContactDueAt(?CarbonInterface $lastContactedAt): Carbon
     {
         $due = match (true) {
             $lastContactedAt !== null           => Carbon::parse($lastContactedAt)->addMonthsNoOverflow($this->contactIntervalMonths()),
             $this->first_contact_due_at !== null => Carbon::parse($this->first_contact_due_at),
-            default                             => today(),
+            default                             => self::contactScheduleStart(),
         };
 
         return $due->startOfWeek(Carbon::MONDAY);
+    }
+
+    /**
+     * The earliest a first contact can fall due: today, or the configured
+     * schedule start date if that is later.
+     */
+    public static function contactScheduleStart(): Carbon
+    {
+        $start = config('integrations.contact_schedule_starts_on');
+
+        return $start ? max(today(), Carbon::parse($start)->startOfDay()) : today();
     }
 
     /**
