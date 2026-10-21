@@ -42,6 +42,15 @@ interface Props {
   integrations: Integration[]
   last_synced_at: string | null
   current_user_id: number
+  // Only admins can invite, remove or change the role of users
+  can_manage_users: boolean
+  roles: Record<string, string>
+}
+
+function roleBadgeVariant(role: string): 'default' | 'secondary' | 'outline' {
+  if (role === 'admin') return 'default'
+  if (role === 'account_manager') return 'secondary'
+  return 'outline'
 }
 
 export default function SettingsIndex({
@@ -50,6 +59,8 @@ export default function SettingsIndex({
   integrations,
   last_synced_at,
   current_user_id,
+  can_manage_users,
+  roles,
 }: Props) {
   const [confirmRemove, setConfirmRemove] = useState<number | null>(null)
   const [confirmCancel, setConfirmCancel] = useState<number | null>(null)
@@ -62,6 +73,10 @@ export default function SettingsIndex({
     inviteForm.post('/invitations', {
       onSuccess: () => inviteForm.reset(),
     })
+  }
+
+  function changeRole(id: number, role: string) {
+    router.patch(`/settings/users/${id}/role`, { role }, { preserveScroll: true })
   }
 
   function removeUser(id: number) {
@@ -148,15 +163,25 @@ export default function SettingsIndex({
                       </TableCell>
                       <TableCell>{u.email}</TableCell>
                       <TableCell>
-                        <Badge variant={u.role === 'admin' ? 'default' : 'secondary'}>
-                          {u.role}
-                        </Badge>
+                        {can_manage_users && u.id !== current_user_id ? (
+                          <select
+                            value={u.role}
+                            onChange={(e) => changeRole(u.id, e.target.value)}
+                            className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                          >
+                            {Object.entries(roles).map(([value, label]) => (
+                              <option key={value} value={value}>{label}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <Badge variant={roleBadgeVariant(u.role)}>{roles[u.role] ?? u.role}</Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm">
                         {formatDate(u.created_at)}
                       </TableCell>
                       <TableCell className="text-right">
-                        {u.id !== current_user_id && (
+                        {can_manage_users && u.id !== current_user_id && (
                           confirmRemove === u.id ? (
                             <div className="flex items-center justify-end gap-2">
                               <span className="text-sm text-muted-foreground">Remove?</span>
@@ -186,6 +211,7 @@ export default function SettingsIndex({
             </CardContent>
           </Card>
 
+          {can_manage_users && (
           <Card>
             <CardHeader>
               <CardTitle>Invite someone</CardTitle>
@@ -214,8 +240,9 @@ export default function SettingsIndex({
                     onChange={(e) => inviteForm.setData('role', e.target.value)}
                     className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    <option value="viewer">Viewer</option>
-                    <option value="admin">Admin</option>
+                    {Object.entries(roles).map(([value, label]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
                   </select>
                 </div>
                 <Button type="submit" disabled={inviteForm.processing} className="gap-2">
@@ -225,6 +252,7 @@ export default function SettingsIndex({
               </form>
             </CardContent>
           </Card>
+          )}
 
           {pending_invitations.length > 0 && (
             <Card>
@@ -248,16 +276,14 @@ export default function SettingsIndex({
                       <TableRow key={inv.id}>
                         <TableCell>{inv.email}</TableCell>
                         <TableCell>
-                          <Badge variant={inv.role === 'admin' ? 'default' : 'secondary'}>
-                            {inv.role}
-                          </Badge>
+                          <Badge variant={roleBadgeVariant(inv.role)}>{roles[inv.role] ?? inv.role}</Badge>
                         </TableCell>
                         <TableCell className="text-muted-foreground">{inv.invited_by}</TableCell>
                         <TableCell className="text-muted-foreground text-sm">
                           {formatDate(inv.expires_at)}
                         </TableCell>
                         <TableCell className="text-right">
-                          {confirmCancel === inv.id ? (
+                          {!can_manage_users ? null : confirmCancel === inv.id ? (
                             <div className="flex items-center justify-end gap-2">
                               <span className="text-sm text-muted-foreground">Cancel?</span>
                               <Button size="sm" variant="destructive" onClick={() => cancelInvitation(inv.id)}>

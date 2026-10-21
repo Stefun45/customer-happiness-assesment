@@ -12,8 +12,9 @@ class ScheduleController extends Controller
 {
     public function index(Request $request): Response
     {
-        // manager: "me" (default), "all", "unassigned" or a user id
-        $manager        = $request->input('manager', 'me');
+        // manager: "me", "all", "unassigned" or a user id. Viewers manage no
+        // customers, so they default to everyone's
+        $manager        = $request->input('manager', $request->user()->canManageAccounts() ? 'me' : 'all');
         // status: overdue, week (overdue + this week), fortnight (+ next week) or all
         $status         = $request->input('status', 'week');
         $enterpriseOnly = $request->boolean('enterprise');
@@ -73,7 +74,7 @@ class ScheduleController extends Controller
         return Inertia::render('Schedule/Index', [
             'rows'     => $visible,
             'summary'  => $summary,
-            'users'    => User::orderBy('name')->get(['id', 'name']),
+            'users'    => User::accountManagers(),
             'filters'  => [
                 'manager'    => (string) $manager,
                 'status'     => $status,

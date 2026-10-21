@@ -5,14 +5,20 @@ namespace App\Http\Controllers;
 use App\Models\Invitation;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class SettingsController extends Controller
 {
-    public function index(): Response
+    public function index(Request $request): Response|RedirectResponse
     {
+        if (!$request->user()->canManageAccounts()) {
+            return redirect('/dashboard')->with('error', 'You do not have permission to access that page.');
+        }
+
         $users = User::orderBy('name')->get()->map(fn(User $u) => [
             'id'         => $u->id,
             'name'       => $u->name,
@@ -48,7 +54,27 @@ class SettingsController extends Controller
             'integrations'        => $integrations,
             'last_synced_at'      => Cache::get('last_synced_at'),
             'current_user_id'     => auth()->id(),
+            'can_manage_users'    => $request->user()->isAdmin(),
+            'roles'               => User::ROLES,
         ]);
+    }
+
+    public function updateRole(Request $request, User $user): RedirectResponse
+    {
+        $request->validate(['role' => ['required', Rule::in(array_keys(User::ROLES))]]);
+
+        if ($user->id === auth()->id()) {
+            return back()->with('error', 'You cannot change your own role.');
+        }
+
+        $user->update(['role' => $request->input('role')]);
+
+        // Customers can only be managed by admins and account managers
+        if (!$user->canManageAccounts()) {
+            \App\Models\Client::where('account_manager_id', $user->id)->update(['account_manager_id' => null]);
+        }
+
+        return back()->with('success', "{$user->name} is now " . strtolower(User::ROLES[$user->role]) . '.');
     }
 
     public function removeUser(User $user): RedirectResponse

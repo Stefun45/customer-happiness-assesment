@@ -20,7 +20,8 @@ interface PageProps {
 }
 
 /**
- * Admins can assign any user; everyone else can assign or unassign themselves.
+ * Admins can assign any account manager; account managers can assign or
+ * unassign themselves; viewers just see who manages the customer.
  */
 export default function AccountManagerControl({ clientId, current, users }: Props) {
   const { auth } = usePage<PageProps>().props
@@ -53,13 +54,14 @@ export default function AccountManagerControl({ clientId, current, users }: Prop
   }
 
   const isMine = current?.id === me?.id
+  const canAssignSelf = me?.role === 'account_manager'
 
   return (
     <div className="flex items-center gap-2">
       <span className={current ? 'text-sm' : 'text-sm text-muted-foreground'}>
         {current?.name ?? 'Unassigned'}
       </span>
-      {isMine ? (
+      {canAssignSelf && (isMine ? (
         <Button variant="ghost" size="sm" onClick={() => assign(null)} title="Unassign me">
           <UserMinus className="h-3.5 w-3.5" />
         </Button>
@@ -68,7 +70,7 @@ export default function AccountManagerControl({ clientId, current, users }: Prop
           <UserPlus className="h-3.5 w-3.5 mr-1" />
           Assign to me
         </Button>
-      )}
+      ))}
     </div>
   )
 }

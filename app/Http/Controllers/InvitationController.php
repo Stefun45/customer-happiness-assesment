@@ -19,7 +19,7 @@ class InvitationController extends Controller
     {
         $request->validate([
             'email' => 'required|email|unique:users,email',
-            'role'  => 'required|in:admin,viewer',
+            'role'  => ['required', \Illuminate\Validation\Rule::in(array_keys(\App\Models\User::ROLES))],
         ]);
 
         // Replace any existing pending invite for this address

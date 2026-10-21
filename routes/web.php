@@ -58,9 +58,12 @@ Route::middleware('auth')->group(function () {
 
     Route::post('/sync', [SyncController::class, 'trigger'])->name('sync.trigger');
 
+    // Admins and account managers (read-only for account managers)
+    Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
+
     // Admin-only routes
     Route::middleware('admin')->group(function () {
-        Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
+        Route::patch('/settings/users/{user}/role', [SettingsController::class, 'updateRole'])->name('settings.users.role');
         Route::delete('/settings/users/{user}', [SettingsController::class, 'removeUser'])->name('settings.users.remove');
 
         Route::post('/invitations', [InvitationController::class, 'store'])->name('invitations.store');

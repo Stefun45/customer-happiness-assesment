@@ -215,7 +215,7 @@ class ClientController extends Controller
             ]),
             'notes'          => $notes,
             'fireflies_calls' => ContactLogController::firefliesCalls($client),
-            'users'          => User::orderBy('name')->get(['id', 'name']),
+            'users'          => User::accountManagers(),
             'communications' => $communications,
             'invoices'       => $invoices,
             'latest_score'   => $latestScore,
@@ -225,14 +225,23 @@ class ClientController extends Controller
     }
 
     /**
-     * Admins can assign anyone; everyone else can only assign themselves or unassign themselves.
+     * Admins can assign any account manager; account managers can only assign or
+     * unassign themselves. Viewers cannot manage accounts.
      */
     public function updateAccountManager(Request $request, Client $client): RedirectResponse
     {
-        $request->validate(['account_manager_id' => 'nullable|integer|exists:users,id']);
+        $request->validate([
+            'account_manager_id' => [
+                'nullable',
+                'integer',
+                \Illuminate\Validation\Rule::exists('users', 'id')->whereIn('role', User::ACCOUNT_MANAGER_ROLES),
+            ],
+        ], ['account_manager_id.exists' => 'Only admins and account managers can be assigned customers.']);
 
         $user  = $request->user();
         $newId = $request->input('account_manager_id') !== null ? $request->integer('account_manager_id') : null;
+
+        abort_unless($user->canManageAccounts(), 403, 'Only account managers can be assigned customers.');
 
         if (!$user->isAdmin()) {
             $assigningSelf    = $newId === $user->id;

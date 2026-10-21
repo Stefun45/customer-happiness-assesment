@@ -22,7 +22,8 @@ interface NavItem {
   label: string
   href: string
   icon: React.ComponentType<{ className?: string }>
-  adminOnly?: boolean
+  // Roles that can see this item; all roles when omitted
+  roles?: string[]
 }
 
 const navItems: NavItem[] = [
@@ -31,7 +32,7 @@ const navItems: NavItem[] = [
   { label: 'Schedule',       href: '/schedule',        icon: CalendarCheck },
   { label: 'Communications', href: '/communications',  icon: MessageSquare },
   { label: 'Invoices',       href: '/invoices',        icon: Receipt },
-  { label: 'Settings',       href: '/settings',        icon: Settings, adminOnly: true },
+  { label: 'Settings',       href: '/settings',        icon: Settings, roles: ['admin', 'account_manager'] },
 ]
 
 interface AuthUser {
@@ -70,7 +71,7 @@ export default function AppLayout({ children, title }: AppLayoutProps) {
     router.post('/logout')
   }
 
-  const isAdmin = auth.user?.role === 'admin'
+  const role = auth.user?.role ?? ''
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -97,7 +98,7 @@ export default function AppLayout({ children, title }: AppLayoutProps) {
 
         <nav className="flex-1 space-y-1 p-4">
           {navItems.map((item) => {
-            if (item.adminOnly && !isAdmin) return null
+            if (item.roles && !item.roles.includes(role)) return null
             const Icon = item.icon
             const isActive = url.startsWith(item.href)
             return (

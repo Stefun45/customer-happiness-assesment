@@ -17,6 +17,16 @@ class User extends Authenticatable
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
 
+    // role => label
+    public const ROLES = [
+        'admin'           => 'Admin',
+        'account_manager' => 'Account manager',
+        'viewer'          => 'Viewer',
+    ];
+
+    // Roles that can be assigned customers as their account manager
+    public const ACCOUNT_MANAGER_ROLES = ['admin', 'account_manager'];
+
     protected function casts(): array
     {
         return [
@@ -28,5 +38,18 @@ class User extends Authenticatable
     public function isAdmin(): bool
     {
         return $this->role === 'admin';
+    }
+
+    public function canManageAccounts(): bool
+    {
+        return in_array($this->role, self::ACCOUNT_MANAGER_ROLES, true);
+    }
+
+    /**
+     * Users who can be assigned customers, for account manager pickers.
+     */
+    public static function accountManagers()
+    {
+        return self::whereIn('role', self::ACCOUNT_MANAGER_ROLES)->orderBy('name')->get(['id', 'name']);
     }
 }

@@ -22,6 +22,7 @@ class ContactScheduleTest extends TestCase
         foreach ([
             '0001_01_01_000000_create_users_table.php',
             '2026_07_27_200000_add_role_to_users_table.php',
+            '2026_07_27_200001_create_invitations_table.php',
             '2025_05_22_100001_create_clients_table.php',
             '2026_07_27_114235_add_lost_fields_to_clients_table.php',
             '2026_07_28_100000_add_is_enterprise_to_clients_table.php',
@@ -65,8 +66,8 @@ class ContactScheduleTest extends TestCase
 
     public function test_schedule_lists_my_due_customers_soonest_first(): void
     {
-        $me    = User::factory()->create(['role' => 'viewer']);
-        $other = User::factory()->create();
+        $me    = User::factory()->create(['role' => 'account_manager']);
+        $other = User::factory()->create(['role' => 'account_manager']);
 
         $overdue   = $this->client(['is_enterprise' => true, 'account_manager_id' => $me->id]);
         $overdue->contactLogs()->create(['contacted_at' => '2026-09-01']);
@@ -86,24 +87,55 @@ class ContactScheduleTest extends TestCase
         );
     }
 
-    public function test_anyone_can_assign_themselves_but_only_admins_can_assign_others(): void
+    public function test_account_managers_assign_themselves_and_only_admins_assign_others(): void
     {
-        $viewer = User::factory()->create(['role' => 'viewer']);
-        $other  = User::factory()->create(['role' => 'viewer']);
-        $admin  = User::factory()->create(['role' => 'admin']);
-        $client = $this->client(['account_manager_id' => $other->id]);
+        $manager = User::factory()->create(['role' => 'account_manager']);
+        $other   = User::factory()->create(['role' => 'account_manager']);
+        $viewer  = User::factory()->create(['role' => 'viewer']);
+        $admin   = User::factory()->create(['role' => 'admin']);
+        $client  = $this->client(['account_manager_id' => $other->id]);
 
-        $this->actingAs($viewer)->patch("/clients/{$client->id}/account-manager", ['account_manager_id' => $other->id])->assertForbidden();
-        $this->actingAs($viewer)->patch("/clients/{$client->id}/account-manager", ['account_manager_id' => null])->assertForbidden();
+        $this->actingAs($manager)->patch("/clients/{$client->id}/account-manager", ['account_manager_id' => $admin->id])->assertForbidden();
+        $this->actingAs($manager)->patch("/clients/{$client->id}/account-manager", ['account_manager_id' => null])->assertForbidden();
 
-        $this->actingAs($viewer)->patch("/clients/{$client->id}/account-manager", ['account_manager_id' => $viewer->id])->assertRedirect();
-        $this->assertSame($viewer->id, $client->fresh()->account_manager_id);
+        $this->actingAs($manager)->patch("/clients/{$client->id}/account-manager", ['account_manager_id' => $manager->id])->assertRedirect();
+        $this->assertSame($manager->id, $client->fresh()->account_manager_id);
 
-        $this->actingAs($viewer)->patch("/clients/{$client->id}/account-manager", ['account_manager_id' => null])->assertRedirect();
+        $this->actingAs($manager)->patch("/clients/{$client->id}/account-manager", ['account_manager_id' => null])->assertRedirect();
         $this->assertNull($client->fresh()->account_manager_id);
+
+        // Viewers can't take customers, and admins can't hand them to viewers
+        $this->actingAs($viewer)->patch("/clients/{$client->id}/account-manager", ['account_manager_id' => $viewer->id])->assertSessionHasErrors('account_manager_id');
+        $this->actingAs($admin)->patch("/clients/{$client->id}/account-manager", ['account_manager_id' => $viewer->id])->assertSessionHasErrors('account_manager_id');
 
         $this->actingAs($admin)->patch("/clients/{$client->id}/account-manager", ['account_manager_id' => $other->id])->assertRedirect();
         $this->assertSame($other->id, $client->fresh()->account_manager_id);
+    }
+
+    public function test_account_managers_see_settings_but_cannot_manage_users(): void
+    {
+        $manager = User::factory()->create(['role' => 'account_manager']);
+        $viewer  = User::factory()->create(['role' => 'viewer']);
+        $admin   = User::factory()->create(['role' => 'admin']);
+        $client  = $this->client(['account_manager_id' => $manager->id]);
+
+        $this->actingAs($manager)->get('/settings')->assertInertia(fn(Assert $page) => $page
+            ->component('Settings/Index', false)
+            ->where('can_manage_users', false)
+        );
+        $this->actingAs($viewer)->get('/settings')->assertRedirect('/dashboard');
+
+        $this->actingAs($manager)->post('/invitations', ['email' => 'new@example.com', 'role' => 'viewer'])->assertRedirect('/dashboard');
+        $this->actingAs($manager)->patch("/settings/users/{$viewer->id}/role", ['role' => 'admin'])->assertRedirect('/dashboard');
+        $this->assertSame('viewer', $viewer->fresh()->role);
+
+        // Demoting an account manager releases their customers
+        $this->actingAs($admin)->patch("/settings/users/{$manager->id}/role", ['role' => 'viewer'])->assertRedirect();
+        $this->assertSame('viewer', $manager->fresh()->role);
+        $this->assertNull($client->fresh()->account_manager_id);
+
+        $this->actingAs($admin)->patch("/settings/users/{$admin->id}/role", ['role' => 'viewer']);
+        $this->assertSame('admin', $admin->fresh()->role, 'cannot change own role');
     }
 
     public function test_completing_a_contact_links_only_this_clients_fireflies_calls(): void

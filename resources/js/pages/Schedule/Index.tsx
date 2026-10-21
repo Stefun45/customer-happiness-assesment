@@ -79,7 +79,7 @@ export default function ScheduleIndex({
     router.get(
       '/schedule',
       {
-        manager: next.manager !== 'me' ? next.manager : undefined,
+        manager: next.manager,
         status: next.status !== 'week' ? next.status : undefined,
         enterprise: next.enterprise ? 1 : undefined,
       },
