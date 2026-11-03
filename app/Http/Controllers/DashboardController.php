@@ -4,14 +4,21 @@ namespace App\Http\Controllers;
 
 use App\Models\Client;
 use App\Models\Invoice;
+use App\Models\User;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class DashboardController extends Controller
 {
-    public function index(): Response
+    public function index(Request $request): Response
     {
+        // Client overview filter: "me", "all", "unassigned" or a user id.
+        // Account managers default to their own customers, everyone else to all
+        $user    = $request->user();
+        $manager = (string) $request->input('manager', $user->role === 'account_manager' ? 'me' : 'all');
+
         $totalClients = Client::count();
         $atRiskClients = Client::atRisk()->count();
         $outstandingInvoicesCount = Invoice::whereNull('paid_at')->count();
@@ -39,10 +46,14 @@ class DashboardController extends Controller
         $clients = Client::with([
             'happinessScores' => fn($q) => $q->latest('scored_at')->limit(1),
             'invoices'        => fn($q) => $q->whereNull('paid_at'),
+            'accountManager:id,name',
         ])
         ->leftJoinSub($latestScores, 'ls', 'clients.id', '=', 'ls.client_id')
         ->select('clients.*')
         ->whereNull('clients.lost_at')
+        ->when($manager === 'me', fn($q) => $q->where('clients.account_manager_id', $user->id))
+        ->when($manager === 'unassigned', fn($q) => $q->whereNull('clients.account_manager_id'))
+        ->when(ctype_digit($manager), fn($q) => $q->where('clients.account_manager_id', (int) $manager))
         ->orderByRaw("CASE WHEN ls.churn_risk = 'high' THEN 0 WHEN ls.churn_risk = 'medium' THEN 1 WHEN ls.churn_risk = 'low' THEN 2 ELSE 3 END")
         ->orderBy('ls.score', 'asc')
         ->limit(50)
@@ -53,6 +64,7 @@ class DashboardController extends Controller
             'company_name' => $client->company_name,
             'last_contact' => $client->communications()->latest('occurred_at')->value('occurred_at'),
             'outstanding_invoices_amount' => $client->invoices->sum('amount_pence'),
+            'account_manager' => $client->accountManager?->name,
             'latest_score' => $client->happinessScores->first() ? [
                 'score' => $client->happinessScores->first()->score,
                 'churn_risk' => $client->happinessScores->first()->churn_risk,
@@ -67,6 +79,8 @@ class DashboardController extends Controller
                 'outstanding_invoices_count' => $outstandingInvoicesCount,
             ],
             'clients' => $clients,
+            'filters' => ['manager' => $manager],
+            'users'   => User::accountManagers(),
         ]);
     }
 }

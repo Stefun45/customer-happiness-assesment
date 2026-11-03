@@ -27,6 +27,8 @@ class ContactScheduleTest extends TestCase
             '2026_07_27_114235_add_lost_fields_to_clients_table.php',
             '2026_07_28_100000_add_is_enterprise_to_clients_table.php',
             '2025_05_22_100002_create_communications_table.php',
+            '2025_05_22_100003_create_invoices_table.php',
+            '2026_10_16_000001_add_freeagent_tools_fields_to_invoices_table.php',
             '2025_05_22_100004_create_happiness_scores_table.php',
             '2026_10_20_000001_add_account_manager_to_clients_table.php',
             '2026_10_20_000002_create_contact_logs_table.php',
@@ -211,5 +213,41 @@ class ContactScheduleTest extends TestCase
 
         $this->assertSame('2026-12-10', Client::contactScheduleStart()->toDateString());
         $this->assertSame('2026-12-07', $client->nextContactDueAt(null)->toDateString());
+    }
+
+    public function test_dashboard_overview_filters_by_account_manager(): void
+    {
+        $manager = User::factory()->create(['role' => 'account_manager']);
+        $other   = User::factory()->create(['role' => 'account_manager']);
+        $admin   = User::factory()->create(['role' => 'admin']);
+
+        $mine       = $this->client(['account_manager_id' => $manager->id]);
+        $theirs     = $this->client(['account_manager_id' => $other->id]);
+        $unassigned = $this->client();
+
+        // Account managers default to their own customers
+        $this->actingAs($manager)->get('/dashboard')->assertInertia(fn(Assert $page) => $page
+            ->component('Dashboard', false)
+            ->where('filters.manager', 'me')
+            ->has('clients', 1)
+            ->where('clients.0.id', $mine->id)
+            ->where('clients.0.account_manager', $manager->name)
+        );
+
+        // Everyone else defaults to all
+        $this->actingAs($admin)->get('/dashboard')->assertInertia(fn(Assert $page) => $page
+            ->where('filters.manager', 'all')
+            ->has('clients', 3)
+        );
+
+        $this->actingAs($admin)->get('/dashboard?manager=unassigned')->assertInertia(fn(Assert $page) => $page
+            ->has('clients', 1)
+            ->where('clients.0.id', $unassigned->id)
+        );
+
+        $this->actingAs($admin)->get("/dashboard?manager={$other->id}")->assertInertia(fn(Assert $page) => $page
+            ->has('clients', 1)
+            ->where('clients.0.id', $theirs->id)
+        );
     }
 }

@@ -24,6 +24,7 @@ interface Client {
   company_name: string
   last_contact: string | null
   outstanding_invoices_amount: number
+  account_manager: string | null
   latest_score: HappinessScore | null
 }
 
@@ -37,6 +38,9 @@ interface DashboardStats {
 interface Props {
   stats: DashboardStats
   clients: Client[]
+  // manager: "me", "all", "unassigned" or a user id
+  filters: { manager: string }
+  users: { id: number; name: string }[]
 }
 
 function happinessBadgeVariant(score: number): 'default' | 'secondary' | 'destructive' {
@@ -64,7 +68,23 @@ const mockStats: DashboardStats = {
 
 const mockClients: Client[] = []
 
-export default function Dashboard({ stats = mockStats, clients = mockClients }: Props) {
+export default function Dashboard({
+  stats = mockStats,
+  clients = mockClients,
+  filters = { manager: 'all' },
+  users = [],
+}: Props) {
+  function filterByManager(manager: string) {
+    router.get('/dashboard', { manager }, { preserveState: true, preserveScroll: true, replace: true })
+  }
+
+  const managerName = users.find((u) => String(u.id) === filters.manager)?.name
+  const overviewScope =
+    filters.manager === 'me' ? 'Your customers'
+    : filters.manager === 'unassigned' ? 'Unassigned customers'
+    : managerName ? `${managerName}'s customers`
+    : 'All customers'
+
   return (
     <AppLayout title="Dashboard">
       <Head title="Dashboard" />
@@ -123,23 +143,60 @@ export default function Dashboard({ stats = mockStats, clients = mockClients }: 
       {/* Client table */}
       <Card>
         <CardHeader>
-          <CardTitle>Client Overview</CardTitle>
-          <CardDescription>
-            Clients ordered by churn risk — highest risk first.
-          </CardDescription>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle>Client Overview</CardTitle>
+              <CardDescription>
+                {overviewScope}, ordered by churn risk — highest risk first.
+              </CardDescription>
+            </div>
+            <select
+              aria-label="Filter by account manager"
+              className="border rounded-md px-3 py-2 text-sm bg-background"
+              value={filters.manager}
+              onChange={(e) => filterByManager(e.target.value)}
+            >
+              <option value="me">My customers</option>
+              <option value="all">All account managers</option>
+              <option value="unassigned">Unassigned</option>
+              {users.map((u) => (
+                <option key={u.id} value={String(u.id)}>
+                  {u.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </CardHeader>
         <CardContent>
           {clients.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
               <Users className="h-12 w-12 mb-4 opacity-30" />
-              <p className="text-lg font-medium">No clients yet</p>
-              <p className="text-sm">Sync data from your integrations to see clients here.</p>
+              {filters.manager === 'me' ? (
+                <>
+                  <p className="text-lg font-medium">No customers assigned to you</p>
+                  <p className="text-sm">
+                    Pick up customers from the{' '}
+                    <a href="/schedule?manager=unassigned&status=all" className="text-primary hover:underline">
+                      unassigned list
+                    </a>
+                    .
+                  </p>
+                </>
+              ) : filters.manager !== 'all' ? (
+                <p className="text-lg font-medium">No customers match this filter</p>
+              ) : (
+                <>
+                  <p className="text-lg font-medium">No clients yet</p>
+                  <p className="text-sm">Sync data from your integrations to see clients here.</p>
+                </>
+              )}
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Client</TableHead>
+                  <TableHead>Account Manager</TableHead>
                   <TableHead>Happiness Score</TableHead>
                   <TableHead>Churn Risk</TableHead>
                   <TableHead>Last Contact</TableHead>
@@ -158,6 +215,11 @@ export default function Dashboard({ stats = mockStats, clients = mockClients }: 
                         <p className="font-medium">{client.name}</p>
                         <p className="text-xs text-muted-foreground">{client.company_name}</p>
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      {client.account_manager ?? (
+                        <span className="text-muted-foreground text-xs">Unassigned</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       {client.latest_score ? (
