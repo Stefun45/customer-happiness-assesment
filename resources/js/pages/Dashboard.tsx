@@ -11,7 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Users, AlertTriangle, TrendingUp, Receipt } from 'lucide-react'
+import { Users, AlertTriangle, TrendingUp, Receipt, CalendarClock } from 'lucide-react'
 
 interface HappinessScore {
   score: number
@@ -36,12 +36,103 @@ interface DashboardStats {
   outstanding_invoices_count: number
 }
 
+type TrafficLight = 'green' | 'amber' | 'red'
+
+interface ManagerLoad {
+  customers: number
+  due: number
+  overdue: number
+  light: TrafficLight
+}
+
+interface ManagerOverview {
+  managers: (ManagerLoad & { id: number; name: string })[]
+  unassigned: ManagerLoad
+}
+
 interface Props {
   stats: DashboardStats
   clients: Client[]
   // manager: "me", "all", "unassigned" or a user id
   filters: { manager: string }
   users: { id: number; name: string }[]
+  // Admins only
+  manager_overview: ManagerOverview | null
+}
+
+const lightStyles: Record<TrafficLight, { dot: string; text: string; label: string }> = {
+  green: { dot: 'bg-green-500', text: 'text-green-600', label: 'On track' },
+  amber: { dot: 'bg-amber-500', text: 'text-amber-600', label: 'Falling behind' },
+  red:   { dot: 'bg-red-500',   text: 'text-red-600',   label: 'Behind' },
+}
+
+function TrafficLightCell({ load }: { load: ManagerLoad }) {
+  const style = lightStyles[load.light]
+  return (
+    <span className="inline-flex items-center gap-2">
+      <span className={`h-3 w-3 rounded-full ${style.dot}`} aria-hidden="true" />
+      <span className={`font-medium ${style.text}`}>{load.overdue}</span>
+      <span className="text-xs text-muted-foreground">{style.label}</span>
+    </span>
+  )
+}
+
+function ManagerOverviewCard({ overview }: { overview: ManagerOverview }) {
+  const openSchedule = (manager: string) => router.visit(`/schedule?manager=${manager}&status=overdue`)
+
+  return (
+    <Card className="mb-8">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle>Account Manager Overview</CardTitle>
+            <CardDescription>
+              Overdue scheduled contacts: green none, amber 1-3, red 4 or more. Click a row to see them.
+            </CardDescription>
+          </div>
+          <CalendarClock className="h-4 w-4 text-muted-foreground" />
+        </div>
+      </CardHeader>
+      <CardContent>
+        {overview.managers.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-4 text-center">
+            No account managers yet. Give people the Account manager role in Settings.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Account Manager</TableHead>
+                  <TableHead>Customers</TableHead>
+                  <TableHead>Due This Week</TableHead>
+                  <TableHead>Overdue</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {overview.managers.map((m) => (
+                  <TableRow key={m.id} className="cursor-pointer hover:bg-muted/50" onClick={() => openSchedule(String(m.id))}>
+                    <TableCell className="font-medium">{m.name}</TableCell>
+                    <TableCell>{m.customers}</TableCell>
+                    <TableCell>{m.due}</TableCell>
+                    <TableCell><TrafficLightCell load={m} /></TableCell>
+                  </TableRow>
+                ))}
+                {overview.unassigned.customers > 0 && (
+                  <TableRow className="cursor-pointer hover:bg-muted/50" onClick={() => openSchedule('unassigned')}>
+                    <TableCell className="text-muted-foreground italic">Unassigned</TableCell>
+                    <TableCell>{overview.unassigned.customers}</TableCell>
+                    <TableCell>{overview.unassigned.due}</TableCell>
+                    <TableCell><TrafficLightCell load={overview.unassigned} /></TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
 }
 
 function happinessBadgeVariant(score: number): 'default' | 'secondary' | 'destructive' {
@@ -74,6 +165,7 @@ export default function Dashboard({
   clients = mockClients,
   filters = { manager: 'all' },
   users = [],
+  manager_overview = null,
 }: Props) {
   function filterByManager(manager: string) {
     router.get('/dashboard', { manager }, { preserveState: true, preserveScroll: true, replace: true })
@@ -140,6 +232,8 @@ export default function Dashboard({
           </CardContent>
         </Card>
       </div>
+
+      {manager_overview && <ManagerOverviewCard overview={manager_overview} />}
 
       {/* Client table */}
       <Card>

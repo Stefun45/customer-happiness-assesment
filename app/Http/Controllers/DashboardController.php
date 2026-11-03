@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\User;
+use App\Services\ContactScheduleService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -12,7 +13,7 @@ use Inertia\Response;
 
 class DashboardController extends Controller
 {
-    public function index(Request $request): Response
+    public function index(Request $request, ContactScheduleService $schedule): Response
     {
         // Client overview filter: "me", "all", "unassigned" or a user id.
         // Account managers default to their own customers, everyone else to all
@@ -81,6 +82,8 @@ class DashboardController extends Controller
             ],
             'clients' => $clients,
             'filters' => ['manager' => $manager],
+            // Admins only: overdue contacts per account manager
+            'manager_overview' => $user->isAdmin() ? $schedule->managerOverview() : null,
             'users'   => User::accountManagers(),
         ]);
     }

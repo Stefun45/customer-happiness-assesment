@@ -385,4 +385,46 @@ class ContactScheduleTest extends TestCase
         Carbon::setTestNow(Carbon::parse('2026-11-06 16:30', 'Europe/London'));
         $this->assertSame('due', Client::contactStatus(Carbon::parse('2026-11-02')));
     }
+
+    public function test_traffic_light_thresholds(): void
+    {
+        $this->assertSame('green', ContactScheduleService::trafficLight(0));
+        $this->assertSame('amber', ContactScheduleService::trafficLight(1));
+        $this->assertSame('amber', ContactScheduleService::trafficLight(3));
+        $this->assertSame('red', ContactScheduleService::trafficLight(4));
+    }
+
+    public function test_admins_see_overdue_contacts_per_account_manager(): void
+    {
+        $admin   = User::factory()->create(['role' => 'admin', 'name' => 'Admin']);
+        $behind  = User::factory()->create(['role' => 'account_manager', 'name' => 'Behind']);
+        $onTrack = User::factory()->create(['role' => 'account_manager', 'name' => 'On Track']);
+        $viewer  = User::factory()->create(['role' => 'viewer']);
+
+        // Four enterprise customers last contacted in August: overdue since September
+        foreach (range(1, 4) as $n) {
+            $this->client(['is_enterprise' => true, 'account_manager_id' => $behind->id])
+                ->contactLogs()->create(['contacted_at' => '2026-08-01']);
+        }
+        // Contacted 20 Sept: due this week (w/c 19 Oct), not overdue
+        $this->client(['is_enterprise' => true, 'account_manager_id' => $onTrack->id])
+            ->contactLogs()->create(['contacted_at' => '2026-09-20']);
+        $this->client(); // unassigned, never contacted: first due from the schedule start
+
+        $this->actingAs($admin)->get('/dashboard')->assertInertia(fn(Assert $page) => $page
+            ->has('manager_overview.managers', 2) // admins without customers are left out
+            ->where('manager_overview.managers.0.name', 'Behind')
+            ->where('manager_overview.managers.0.overdue', 4)
+            ->where('manager_overview.managers.0.light', 'red')
+            ->where('manager_overview.managers.1.name', 'On Track')
+            ->where('manager_overview.managers.1.due', 1)
+            ->where('manager_overview.managers.1.overdue', 0)
+            ->where('manager_overview.managers.1.light', 'green')
+            ->where('manager_overview.unassigned.customers', 1)
+            ->where('manager_overview.unassigned.overdue', 0)
+        );
+
+        $this->actingAs($behind)->get('/dashboard')->assertInertia(fn(Assert $page) => $page->where('manager_overview', null));
+        $this->actingAs($viewer)->get('/dashboard')->assertInertia(fn(Assert $page) => $page->where('manager_overview', null));
+    }
 }

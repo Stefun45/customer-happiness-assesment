@@ -5,13 +5,14 @@ namespace App\Http\Controllers;
 use App\Models\Client;
 use App\Models\HappinessScore;
 use App\Models\User;
+use App\Services\ContactScheduleService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class ScheduleController extends Controller
 {
-    public function index(Request $request): Response
+    public function index(Request $request, ContactScheduleService $schedule): Response
     {
         // manager: "me", "all", "unassigned" or a user id. Viewers manage no
         // customers, so they default to everyone's
@@ -22,35 +23,18 @@ class ScheduleController extends Controller
 
         if (!in_array($status, ['overdue', 'week', 'fortnight', 'all'], true)) $status = 'week';
 
-        // ~500 active clients: schedule is computed in PHP so it stays DB-agnostic
-        $clients = Client::query()
-            ->whereNull('lost_at')
-            ->with('accountManager:id,name')
-            ->withMax('contactLogs', 'contacted_at')
-            ->get(['id', 'name', 'company_name', 'is_enterprise', 'account_manager_id', 'first_contact_due_at']);
-
         // Current score per client: the most recent row (AI or account manager)
         $scores = HappinessScore::query()
             ->whereIn('id', fn($q) => $q->selectRaw('MAX(id)')->from('happiness_scores')->groupBy('client_id'))
             ->get(['client_id', 'score', 'churn_risk', 'source'])
             ->keyBy('client_id');
 
-        $rows = $clients->map(function (Client $client) use ($scores) {
-            $score = $scores->get($client->id);
-            $last  = $client->contact_logs_max_contacted_at ? \Carbon\Carbon::parse($client->contact_logs_max_contacted_at) : null;
-            $dueAt = $client->nextContactDueAt($last);
+        $rows = $schedule->rows()->map(function (array $row) use ($scores) {
+            $score = $scores->get($row['id']);
 
             return [
-                'id'                 => $client->id,
-                'name'               => $client->name,
-                'company_name'       => $client->company_name,
-                'is_enterprise'      => $client->is_enterprise,
-                'interval_months'    => $client->contactIntervalMonths(),
-                'account_manager'    => $client->accountManager ? ['id' => $client->accountManager->id, 'name' => $client->accountManager->name] : null,
-                'last_contacted_at'  => $last?->toDateString(),
-                'next_due_at'        => $dueAt->toDateString(),
-                'status'             => Client::contactStatus($dueAt),
-                'latest_score'       => $score ? [
+                ...$row,
+                'latest_score' => $score ? [
                     'score'      => $score->score,
                     'churn_risk' => $score->churn_risk,
                     'source'     => $score->source,
