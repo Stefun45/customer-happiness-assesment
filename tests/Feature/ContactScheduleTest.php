@@ -365,4 +365,24 @@ class ContactScheduleTest extends TestCase
         $this->assertStringContainsString('Wants a pricing review in Q1', $context);
         $this->assertStringContainsString('Key contact is the MD', $context);
     }
+
+    public function test_due_week_becomes_overdue_after_friday_5pm_uk_time(): void
+    {
+        $thisWeek = Carbon::parse('2026-10-19');
+
+        Carbon::setTestNow(Carbon::parse('2026-10-23 16:59', 'Europe/London'));
+        $this->assertSame('due', Client::contactStatus($thisWeek));
+
+        Carbon::setTestNow(Carbon::parse('2026-10-23 17:01', 'Europe/London'));
+        $this->assertSame('overdue', Client::contactStatus($thisWeek));
+
+        // Weekend: last week is overdue, the coming week is next week
+        Carbon::setTestNow(Carbon::parse('2026-10-24 10:00', 'Europe/London'));
+        $this->assertSame('overdue', Client::contactStatus($thisWeek));
+        $this->assertSame('upcoming', Client::contactStatus(Carbon::parse('2026-10-26')));
+
+        // GMT after the clocks change: still 5pm local, not 5pm UTC
+        Carbon::setTestNow(Carbon::parse('2026-11-06 16:30', 'Europe/London'));
+        $this->assertSame('due', Client::contactStatus(Carbon::parse('2026-11-02')));
+    }
 }

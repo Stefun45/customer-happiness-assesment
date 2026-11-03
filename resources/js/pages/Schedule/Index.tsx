@@ -77,8 +77,9 @@ function HappinessCell({ score }: { score: Row['latest_score'] }) {
 
 function StatusBadge({ status, dueAt }: { status: Status; dueAt: string }) {
   if (status === 'overdue') {
+    // 0 weeks: this week's Friday 5pm deadline has passed
     const weeks = weeksOverdue(dueAt)
-    return <Badge variant="destructive">Overdue {weeks} {weeks === 1 ? 'week' : 'weeks'}</Badge>
+    return <Badge variant="destructive">{weeks < 1 ? 'Overdue' : `Overdue ${weeks} ${weeks === 1 ? 'week' : 'weeks'}`}</Badge>
   }
   if (status === 'due') return <Badge variant="secondary">This week</Badge>
   if (status === 'upcoming') return <Badge variant="outline">Next week</Badge>
@@ -126,7 +127,7 @@ export default function ScheduleIndex({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{summary.overdue}</div>
-            <p className="text-xs text-muted-foreground">Due week has passed</p>
+            <p className="text-xs text-muted-foreground">Missed their Friday 5pm deadline</p>
           </CardContent>
         </Card>
         <Card>
@@ -136,7 +137,7 @@ export default function ScheduleIndex({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{summary.due}</div>
-            <p className="text-xs text-muted-foreground">To contact by Sunday</p>
+            <p className="text-xs text-muted-foreground">To contact by Friday 5pm</p>
           </CardContent>
         </Card>
         <Card>

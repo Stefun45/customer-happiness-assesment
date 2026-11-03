@@ -17,6 +17,11 @@ class Client extends Model
     public const CONTACT_INTERVAL_ENTERPRISE = 1;
     public const CONTACT_INTERVAL_STANDARD   = 4;
 
+    // A due week's contacts must be done by Friday 5pm UK time, then they are overdue
+    public const CONTACT_DEADLINE_TIMEZONE = 'Europe/London';
+    public const CONTACT_DEADLINE_DAYS     = 4; // Monday + 4 = Friday
+    public const CONTACT_DEADLINE_TIME     = '17:00';
+
     protected $fillable = [
         'id',
         'name',
@@ -114,15 +119,23 @@ class Client extends Model
     }
 
     /**
-     * overdue (due week has ended), due (this week), upcoming (next week) or scheduled.
+     * overdue (past Friday 5pm of the due week), due (this week), upcoming
+     * (next week) or scheduled.
      */
     public static function contactStatus(CarbonInterface $dueWeek): string
     {
-        $thisWeek = today()->startOfWeek(Carbon::MONDAY);
+        $now      = now(self::CONTACT_DEADLINE_TIMEZONE);
+        $deadline = Carbon::parse($dueWeek->toDateString() . ' ' . self::CONTACT_DEADLINE_TIME, self::CONTACT_DEADLINE_TIMEZONE)
+            ->addDays(self::CONTACT_DEADLINE_DAYS);
 
-        if ($dueWeek->lt($thisWeek)) return 'overdue';
-        if ($dueWeek->equalTo($thisWeek)) return 'due';
-        if ($dueWeek->equalTo($thisWeek->copy()->addWeek())) return 'upcoming';
+        if ($now->gt($deadline)) return 'overdue';
+
+        // Compare as dates so the server timezone doesn't shift the week
+        $due      = $dueWeek->toDateString();
+        $thisWeek = $now->copy()->startOfWeek(Carbon::MONDAY);
+
+        if ($due === $thisWeek->toDateString()) return 'due';
+        if ($due === $thisWeek->copy()->addWeek()->toDateString()) return 'upcoming';
         return 'scheduled';
     }
 
