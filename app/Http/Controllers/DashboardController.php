@@ -44,7 +44,7 @@ class DashboardController extends Controller
             });
 
         $clients = Client::with([
-            'happinessScores' => fn($q) => $q->latest('scored_at')->limit(1),
+            'happinessScores' => fn($q) => $q->latest('scored_at')->latest('id')->limit(1),
             'invoices'        => fn($q) => $q->whereNull('paid_at'),
             'accountManager:id,name',
         ])
@@ -68,6 +68,7 @@ class DashboardController extends Controller
             'latest_score' => $client->happinessScores->first() ? [
                 'score' => $client->happinessScores->first()->score,
                 'churn_risk' => $client->happinessScores->first()->churn_risk,
+                'source' => $client->happinessScores->first()->source,
             ] : null,
         ]);
 

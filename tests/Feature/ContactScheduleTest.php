@@ -4,7 +4,10 @@ namespace Tests\Feature;
 
 use App\Models\Client;
 use App\Models\Communication;
+use App\Jobs\AnalyseClientHappiness;
+use App\Models\HappinessScore;
 use App\Models\User;
+use App\Services\ClaudeAnalysisService;
 use App\Services\ContactScheduleService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
@@ -30,10 +33,12 @@ class ContactScheduleTest extends TestCase
             '2025_05_22_100003_create_invoices_table.php',
             '2026_10_16_000001_add_freeagent_tools_fields_to_invoices_table.php',
             '2025_05_22_100004_create_happiness_scores_table.php',
+            '2025_05_22_100005_create_alerts_table.php',
             '2026_10_20_000001_add_account_manager_to_clients_table.php',
             '2026_10_20_000002_create_contact_logs_table.php',
             '2026_10_20_000003_create_client_notes_table.php',
             '2026_10_20_000004_add_first_contact_due_at_to_clients_table.php',
+            '2026_11_03_000001_add_source_to_happiness_scores_table.php',
         ] as $migration) {
             Artisan::call('migrate', ['--path' => "database/migrations/{$migration}"]);
         }
@@ -249,5 +254,110 @@ class ContactScheduleTest extends TestCase
             ->has('clients', 1)
             ->where('clients.0.id', $theirs->id)
         );
+    }
+
+    private function fakeAnalysis(?array $result): ClaudeAnalysisService
+    {
+        return new class($result) extends ClaudeAnalysisService {
+            public int $calls = 0;
+
+            public function __construct(private ?array $result)
+            {
+            }
+
+            public function analyseClient(Client $client): ?array
+            {
+                $this->calls++;
+
+                return $this->result;
+            }
+        };
+    }
+
+    private function aiResult(float $score, string $risk): array
+    {
+        return ['score' => $score, 'churn_risk' => $risk, 'summary' => 'AI view', 'concerns' => [], 'actions' => []];
+    }
+
+    public function test_account_manager_assessment_becomes_the_current_score(): void
+    {
+        $manager = User::factory()->create(['role' => 'account_manager']);
+        $client  = $this->client();
+        $client->happinessScores()->create(['score' => 2, 'churn_risk' => 'high', 'analysis_summary' => 'AI', 'key_concerns' => [], 'recommended_actions' => [], 'scored_at' => now()->subDay()]);
+
+        // Score without a reason is rejected
+        $this->actingAs($manager)->post("/clients/{$client->id}/contacts", ['contacted_at' => '2026-10-20', 'assessment_score' => 8])
+            ->assertSessionHasErrors(['assessment_churn_risk', 'assessment_reason']);
+
+        $this->actingAs($manager)->post("/clients/{$client->id}/contacts", [
+            'contacted_at'          => '2026-10-20',
+            'assessment_score'      => 8.5,
+            'assessment_churn_risk' => 'low',
+            'assessment_reason'     => 'Spoke to the MD, happy and renewing',
+        ])->assertSessionHasNoErrors();
+
+        $latest = $client->latestScore();
+        $this->assertTrue($latest->isAccountManagerAssessment());
+        $this->assertSame(8.5, $latest->score);
+        $this->assertSame('low', $latest->churn_risk);
+        $this->assertSame($manager->id, $latest->scored_by_user_id);
+        $this->assertSame($client->contactLogs()->first()->id, $latest->contact_log_id);
+    }
+
+    public function test_assessment_holds_until_new_activity_then_ai_rescores(): void
+    {
+        $client = $this->client();
+        $client->happinessScores()->create(['source' => 'account_manager', 'score' => 8, 'churn_risk' => 'low', 'analysis_summary' => 'Happy', 'key_concerns' => [], 'recommended_actions' => [], 'scored_at' => now()]);
+
+        // No new activity: nightly analysis leaves it alone
+        $ai = $this->fakeAnalysis($this->aiResult(3, 'high'));
+        (new AnalyseClientHappiness($client))->handle($ai);
+        $this->assertSame(0, $ai->calls);
+        $this->assertSame(1, $client->happinessScores()->count());
+
+        // A forced (manual) run re-scores regardless
+        (new AnalyseClientHappiness($client, force: true))->handle($ai);
+        $this->assertSame(1, $ai->calls);
+        $this->assertSame(HappinessScore::SOURCE_AI, $client->latestScore()->source);
+
+        // New activity after an assessment lets the nightly run re-score
+        Carbon::setTestNow('2026-10-21 10:00:00');
+        $client->happinessScores()->create(['source' => 'account_manager', 'score' => 8, 'churn_risk' => 'low', 'analysis_summary' => 'Happy', 'key_concerns' => [], 'recommended_actions' => [], 'scored_at' => now()]);
+        $this->assertTrue($client->accountManagerAssessmentHolds());
+
+        Communication::create(['client_id' => $client->id, 'source' => 'freshdesk', 'source_id' => 't1', 'subject' => 'Late orders', 'body' => '', 'raw_payload' => [], 'occurred_at' => '2026-10-22 09:00']);
+        Carbon::setTestNow('2026-10-23 02:00:00');
+        $this->assertFalse($client->accountManagerAssessmentHolds());
+
+        (new AnalyseClientHappiness($client))->handle($ai);
+        $this->assertSame(2, $ai->calls);
+    }
+
+    public function test_failed_analysis_does_not_replace_the_score(): void
+    {
+        $client = $this->client();
+        $client->happinessScores()->create(['source' => 'account_manager', 'score' => 8, 'churn_risk' => 'low', 'analysis_summary' => 'Happy', 'key_concerns' => [], 'recommended_actions' => [], 'scored_at' => now()]);
+
+        (new AnalyseClientHappiness($client, force: true))->handle($this->fakeAnalysis(null));
+
+        $this->assertSame(1, $client->happinessScores()->count());
+        $this->assertTrue($client->latestScore()->isAccountManagerAssessment());
+    }
+
+    public function test_ai_prompt_includes_the_assessment_and_notes(): void
+    {
+        $manager = User::factory()->create(['role' => 'account_manager', 'name' => 'Gwen']);
+        $client  = $this->client();
+        $client->happinessScores()->create(['source' => 'account_manager', 'scored_by_user_id' => $manager->id, 'score' => 8, 'churn_risk' => 'low', 'analysis_summary' => 'Renewing for two years', 'key_concerns' => [], 'recommended_actions' => [], 'scored_at' => now()]);
+        $client->contactLogs()->create(['contacted_at' => '2026-10-19', 'notes' => 'Wants a pricing review in Q1']);
+        $client->notes()->create(['body' => 'Key contact is the MD']);
+
+        $context = (fn() => $this->accountManagerContext($client))->call(new ClaudeAnalysisService('test-key'));
+
+        $this->assertStringContainsString('ACCOUNT MANAGER ASSESSMENT (2026-10-20, by Gwen)', $context);
+        $this->assertStringContainsString('Score: 8.0/10', $context);
+        $this->assertStringContainsString('Renewing for two years', $context);
+        $this->assertStringContainsString('Wants a pricing review in Q1', $context);
+        $this->assertStringContainsString('Key contact is the MD', $context);
     }
 }

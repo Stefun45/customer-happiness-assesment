@@ -126,9 +126,24 @@ class Client extends Model
         return 'scheduled';
     }
 
+    /**
+     * True while the latest score is an account manager's assessment and no
+     * communication has arrived since: the AI does not re-score until then.
+     */
+    public function accountManagerAssessmentHolds(): bool
+    {
+        $latest = $this->happinessScores()->orderByDesc('scored_at')->orderByDesc('id')->first();
+
+        if (!$latest?->isAccountManagerAssessment()) {
+            return false;
+        }
+
+        return !$this->communications()->where('occurred_at', '>', $latest->scored_at)->exists();
+    }
+
     public function latestScore(): ?HappinessScore
     {
-        return $this->happinessScores()->latest('scored_at')->first();
+        return $this->happinessScores()->latest('scored_at')->latest('id')->first();
     }
 
     // Scopes

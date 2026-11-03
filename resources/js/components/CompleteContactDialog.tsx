@@ -44,6 +44,10 @@ export default function CompleteContactDialog({ client, calls, onOpenChange }: P
   const [contactedAt, setContactedAt] = useState(todayIso())
   const [callId, setCallId] = useState<string>('none')
   const [notes, setNotes] = useState('')
+  const [assessing, setAssessing] = useState(false)
+  const [assessmentScore, setAssessmentScore] = useState('')
+  const [assessmentRisk, setAssessmentRisk] = useState('')
+  const [assessmentReason, setAssessmentReason] = useState('')
   const [fetchedCalls, setFetchedCalls] = useState<FirefliesCall[] | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -56,6 +60,10 @@ export default function CompleteContactDialog({ client, calls, onOpenChange }: P
     if (!client) return
     setContactedAt(todayIso())
     setNotes('')
+    setAssessing(false)
+    setAssessmentScore('')
+    setAssessmentRisk('')
+    setAssessmentReason('')
     setErrors({})
     setFetchedCalls(null)
 
@@ -93,6 +101,13 @@ export default function CompleteContactDialog({ client, calls, onOpenChange }: P
         contacted_at: contactedAt,
         communication_id: callId === 'none' ? null : Number(callId),
         notes: notes || null,
+        ...(assessing
+          ? {
+              assessment_score: assessmentScore === '' ? null : Number(assessmentScore),
+              assessment_churn_risk: assessmentRisk || null,
+              assessment_reason: assessmentReason || null,
+            }
+          : {}),
       },
       {
         preserveScroll: true,
@@ -162,6 +177,74 @@ export default function CompleteContactDialog({ client, calls, onOpenChange }: P
               onChange={(e) => setNotes(e.target.value)}
             />
             {errors.notes && <p className="text-sm text-destructive">{errors.notes}</p>}
+          </div>
+
+          <div className="space-y-3 rounded-md border p-3">
+            <label className="flex items-start gap-2 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={assessing}
+                onChange={(e) => setAssessing(e.target.checked)}
+              />
+              <span>
+                <span className="font-medium">Record my assessment of this customer</span>
+                <span className="block text-xs text-muted-foreground">
+                  Replaces the AI score until new activity comes in, and the AI gives it the most weight when it re-scores.
+                </span>
+              </span>
+            </label>
+
+            {assessing && (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="assessment_score">Happiness (0-10)</Label>
+                    <Input
+                      id="assessment_score"
+                      type="number"
+                      min={0}
+                      max={10}
+                      step={0.5}
+                      value={assessmentScore}
+                      onChange={(e) => setAssessmentScore(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="assessment_churn_risk">Churn risk</Label>
+                    <select
+                      id="assessment_churn_risk"
+                      className="w-full border rounded-md px-3 py-2 text-sm bg-background h-10"
+                      value={assessmentRisk}
+                      onChange={(e) => setAssessmentRisk(e.target.value)}
+                      required
+                    >
+                      <option value="" disabled>Choose...</option>
+                      <option value="low">Low</option>
+                      <option value="medium">Medium</option>
+                      <option value="high">High</option>
+                    </select>
+                  </div>
+                </div>
+                {(errors.assessment_score || errors.assessment_churn_risk) && (
+                  <p className="text-sm text-destructive">{errors.assessment_score ?? errors.assessment_churn_risk}</p>
+                )}
+                <div className="space-y-2">
+                  <Label htmlFor="assessment_reason">Why</Label>
+                  <textarea
+                    id="assessment_reason"
+                    className="w-full border rounded-md px-3 py-2 text-sm bg-background resize-y"
+                    rows={2}
+                    placeholder="e.g. Spoke to the MD, happy with service and renewing"
+                    value={assessmentReason}
+                    onChange={(e) => setAssessmentReason(e.target.value)}
+                    required
+                  />
+                  {errors.assessment_reason && <p className="text-sm text-destructive">{errors.assessment_reason}</p>}
+                </div>
+              </>
+            )}
           </div>
 
           <DialogFooter>

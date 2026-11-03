@@ -98,6 +98,8 @@ interface Invoice {
 
 interface HappinessScore {
   id: number
+  source: 'ai' | 'account_manager'
+  scored_by: string | null
   score: number
   churn_risk: 'low' | 'medium' | 'high'
   analysis_summary: string
@@ -124,6 +126,8 @@ interface Props {
   invoices: Invoice[]
   latest_score: HappinessScore | null
   score_history: HappinessScore[]
+  // Latest score is an account manager's assessment with no newer activity
+  assessment_holds: boolean
   contacts: Contact[]
   schedule: Schedule
   contact_logs: ContactLog[]
@@ -183,6 +187,7 @@ export default function ClientShow({
   invoices = [],
   latest_score = null,
   score_history = [],
+  assessment_holds = false,
   contacts = [],
   schedule = { interval_months: 4, last_contacted_at: null, next_due_at: new Date().toISOString(), status: 'overdue' },
   contact_logs = [],
@@ -365,7 +370,11 @@ export default function ClientShow({
             <Card>
               <CardHeader>
                 <CardTitle>Current Happiness</CardTitle>
-                <CardDescription>Latest AI-generated score</CardDescription>
+                <CardDescription>
+                  {latest_score?.source === 'account_manager'
+                    ? `Assessed by ${latest_score.scored_by ?? 'an account manager'} (account manager)`
+                    : 'Latest AI-generated score'}
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 {latest_score ? (
@@ -390,6 +399,16 @@ export default function ClientShow({
                       Last scored:{' '}
                       {new Date(latest_score.scored_at).toLocaleDateString('en-GB')}
                     </p>
+                    {latest_score.source === 'account_manager' && (
+                      <div className="rounded-md bg-muted p-3 text-sm space-y-1">
+                        <p className="whitespace-pre-wrap">{latest_score.analysis_summary}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {assessment_holds
+                            ? 'Holding: the AI will re-score when new activity comes in.'
+                            : 'New activity since: the AI will re-score on the next sync, weighting this assessment most.'}
+                        </p>
+                      </div>
+                    )}
                   </>
                 ) : (
                   <div className="text-center py-6 text-muted-foreground">
@@ -442,6 +461,7 @@ export default function ClientShow({
             <Card>
               <CardHeader>
                 <CardTitle>Score History</CardTitle>
+                <CardDescription>Outlined bars are account manager assessments</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="flex items-end gap-2 h-24">
@@ -453,10 +473,15 @@ export default function ClientShow({
                         : s.score >= 4
                         ? 'bg-yellow-500'
                         : 'bg-red-500'
+                    const byManager = s.source === 'account_manager'
                     return (
-                      <div key={s.id} className="flex-1 flex flex-col items-center gap-1">
+                      <div
+                        key={s.id}
+                        className="flex-1 flex flex-col items-center gap-1"
+                        title={`${s.score.toFixed(1)} - ${byManager ? `assessed by ${s.scored_by ?? 'account manager'}` : 'AI'}, ${new Date(s.scored_at).toLocaleDateString('en-GB')}`}
+                      >
                         <div className="w-full bg-muted rounded-t" style={{ height: `${pct}%` }}>
-                          <div className={`w-full h-full ${color} rounded-t opacity-80`} />
+                          <div className={`w-full h-full ${color} rounded-t ${byManager ? 'ring-2 ring-foreground ring-inset' : 'opacity-80'}`} />
                         </div>
                         <span className="text-xs text-muted-foreground">
                           {s.score.toFixed(0)}
@@ -809,9 +834,13 @@ export default function ClientShow({
             <div className="space-y-4">
               <Card>
                 <CardHeader>
-                  <CardTitle>AI Assessment Summary</CardTitle>
+                  <CardTitle>
+                    {latest_score.source === 'account_manager' ? 'Account Manager Assessment' : 'AI Assessment Summary'}
+                  </CardTitle>
                   <CardDescription>
-                    Generated on{' '}
+                    {latest_score.source === 'account_manager'
+                      ? `By ${latest_score.scored_by ?? 'an account manager'} on `
+                      : 'Generated on '}
                     {new Date(latest_score.scored_at).toLocaleDateString('en-GB', {
                       weekday: 'long',
                       year: 'numeric',

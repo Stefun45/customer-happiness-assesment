@@ -22,17 +22,36 @@ class AnalyseClientHappiness implements ShouldQueue
     public int $tries = 2;
     public int $timeout = 120;
 
-    public function __construct(protected Client $client)
+    // Declared with a default (not constructor-promoted) so jobs queued before
+    // this property existed still unserialise with it set
+    public bool $force = false;
+
+    /**
+     * $force re-scores even while an account manager's assessment holds
+     * (used by the manual "Run AI Analysis" button).
+     */
+    public function __construct(protected Client $client, bool $force = false)
     {
+        $this->force = $force;
     }
 
     public function handle(ClaudeAnalysisService $service): void
     {
+        if (!$this->force && $this->client->accountManagerAssessmentHolds()) {
+            return;
+        }
+
         try {
             $result = $service->analyseClient($this->client);
 
+            // Never save a placeholder: it would replace a real score
+            if ($result === null) {
+                return;
+            }
+
             $score = HappinessScore::create([
                 'client_id' => $this->client->id,
+                'source' => HappinessScore::SOURCE_AI,
                 'score' => $result['score'],
                 'churn_risk' => $result['churn_risk'],
                 'analysis_summary' => $result['summary'],

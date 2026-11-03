@@ -27,7 +27,7 @@ class ClientController extends Controller
         $needsScoreJoin = in_array($sortBy, ['happiness', 'churn_risk']);
 
         $query = Client::with([
-            'happinessScores' => fn($q) => $q->latest('scored_at')->limit(1),
+            'happinessScores' => fn($q) => $q->latest('scored_at')->latest('id')->limit(1),
         ])
         ->when($needsScoreJoin, function ($q) {
             $latestScores = DB::table('happiness_scores')
@@ -121,10 +121,14 @@ class ClientController extends Controller
             ]);
 
         $scoreHistory = $client->happinessScores()
+            ->with('scoredBy:id,name')
             ->orderBy('scored_at')
+            ->orderBy('id')
             ->get()
             ->map(fn($s) => [
                 'id' => $s->id,
+                'source' => $s->source,
+                'scored_by' => $s->scoredBy?->name,
                 'score' => $s->score,
                 'churn_risk' => $s->churn_risk,
                 'analysis_summary' => $s->analysis_summary,
@@ -219,6 +223,7 @@ class ClientController extends Controller
             'communications' => $communications,
             'invoices'       => $invoices,
             'latest_score'   => $latestScore,
+            'assessment_holds' => $client->accountManagerAssessmentHolds(),
             'score_history'  => $scoreHistory,
             'contacts'       => $mappedContacts,
         ]);
@@ -260,7 +265,8 @@ class ClientController extends Controller
 
     public function analyse(Client $client): RedirectResponse
     {
-        AnalyseClientHappiness::dispatch($client)->onQueue('default');
+        // Forced: an explicit request re-scores even while an account manager's assessment holds
+        AnalyseClientHappiness::dispatch($client, force: true)->onQueue('default');
 
         return back()->with('success', "Analysis for {$client->name} has been queued.");
     }

@@ -16,6 +16,7 @@ import { Users, AlertTriangle, TrendingUp, Receipt } from 'lucide-react'
 interface HappinessScore {
   score: number
   churn_risk: 'low' | 'medium' | 'high'
+  source: 'ai' | 'account_manager'
 }
 
 interface Client {
@@ -223,9 +224,14 @@ export default function Dashboard({
                     </TableCell>
                     <TableCell>
                       {client.latest_score ? (
-                        <Badge variant={happinessBadgeVariant(client.latest_score.score)}>
-                          {client.latest_score.score.toFixed(1)} / 10
-                        </Badge>
+                        <span className="inline-flex items-center gap-1.5">
+                          <Badge variant={happinessBadgeVariant(client.latest_score.score)}>
+                            {client.latest_score.score.toFixed(1)} / 10
+                          </Badge>
+                          {client.latest_score.source === 'account_manager' && (
+                            <span className="text-xs text-muted-foreground" title="Assessed by the account manager">AM</span>
+                          )}
+                        </span>
                       ) : (
                         <span className="text-muted-foreground text-xs">Not scored</span>
                       )}

@@ -21,9 +21,11 @@ class ClaudeAnalysisService
     /**
      * Analyse a client and return a structured happiness assessment.
      *
-     * @return array{score: float, churn_risk: string, summary: string, concerns: array, actions: array}
+     * Returns null if the analysis failed, so no placeholder score is saved.
+     *
+     * @return array{score: float, churn_risk: string, summary: string, concerns: array, actions: array}|null
      */
-    public function analyseClient(Client $client): array
+    public function analyseClient(Client $client): ?array
     {
         $cutoff        = now()->subDays(60);
         $reviewsCutoff = now()->subDays(30);
@@ -74,6 +76,8 @@ class ClaudeAnalysisService
             );
         })->implode("\n");
 
+        $accountManagerText = $this->accountManagerContext($client);
+
         $outstandingTotal = $outstandingInvoices->sum('amount_pence') / 100;
         $customerType     = $client->is_new_customer ? 'New customer' : 'Existing customer';
 
@@ -89,6 +93,12 @@ Scoring guidelines:
 - Score 0-1: Severely at risk, actively unhappy or in dispute
 
 Note: happiness review submissions use a 1–7 scale (1 = worst, 7 = best). Weight these heavily as they are direct customer feedback.
+
+Account manager input is first-hand: the account manager has spoken to the customer directly.
+- An ACCOUNT MANAGER ASSESSMENT carries the most weight of anything you are given. Start from its score and churn risk.
+- Only move away from it where communications dated after the assessment clearly show the situation has changed, and move only as far as that evidence justifies. Older communications were already known to the account manager and do not override their judgement.
+- If your score or churn risk differs from the assessment, say so in the summary and explain what changed since it.
+- Contact notes and team notes are also first-hand context about the relationship.
 
 Churn risk:
 - low: Score >= 7, no major red flags
@@ -108,7 +118,7 @@ TYPE: {$customerType}
 RECENT COMMUNICATIONS (last 90 days):
 {$communicationsText}
 
-INVOICE SUMMARY:
+{$accountManagerText}INVOICE SUMMARY:
 {$invoicesText}
 
 Outstanding invoices total: £{$outstandingTotal}
@@ -163,13 +173,61 @@ PROMPT;
                 'error' => $e->getMessage(),
             ]);
 
-            return [
-                'score' => 5.0,
-                'churn_risk' => 'medium',
-                'summary' => 'Analysis failed. Please retry.',
-                'concerns' => [],
-                'actions' => ['Retry analysis when API is available'],
-            ];
+            return null;
         }
+    }
+
+    /**
+     * The latest account manager assessment, recent contact notes and team
+     * notes, as prompt sections (empty string if there are none).
+     */
+    private function accountManagerContext(Client $client): string
+    {
+        $sections = [];
+        $since    = now()->subMonths(6);
+
+        $assessment = $client->happinessScores()
+            ->where('source', HappinessScore::SOURCE_ACCOUNT_MANAGER)
+            ->with('scoredBy:id,name')
+            ->orderByDesc('scored_at')
+            ->first();
+
+        if ($assessment) {
+            $sections[] = sprintf(
+                "ACCOUNT MANAGER ASSESSMENT (%s, by %s):\nScore: %.1f/10\nChurn risk: %s\nReason: %s",
+                $assessment->scored_at->format('Y-m-d'),
+                $assessment->scoredBy?->name ?? 'account manager',
+                $assessment->score,
+                $assessment->churn_risk,
+                $assessment->analysis_summary
+            );
+        }
+
+        $contacts = $client->contactLogs()
+            ->whereNotNull('notes')
+            ->where('contacted_at', '>=', $since)
+            ->orderByDesc('contacted_at')
+            ->limit(10)
+            ->get()
+            ->map(fn($log) => "[{$log->contacted_at->format('Y-m-d')}] " . substr($log->notes, 0, 1000))
+            ->implode("\n");
+
+        if ($contacts !== '') {
+            $sections[] = "ACCOUNT MANAGER CONTACT NOTES:\n{$contacts}";
+        }
+
+        $notes = $client->notes()
+            ->where('created_at', '>=', $since)
+            ->latest()
+            ->limit(10)
+            ->get()
+            ->map(fn($note) => "[{$note->created_at->format('Y-m-d')}] " . substr($note->body, 0, 1000))
+            ->implode("\n");
+
+        if ($notes !== '') {
+            $sections[] = "TEAM NOTES:\n{$notes}";
+        }
+
+        return $sections ? implode("\n\n", $sections) . "\n\n" : '';
     }
 }
