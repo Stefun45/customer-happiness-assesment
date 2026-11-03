@@ -29,6 +29,7 @@ interface Row {
   last_contacted_at: string | null
   next_due_at: string
   status: Status
+  latest_score: { score: number; churn_risk: 'low' | 'medium' | 'high'; source: 'ai' | 'account_manager' } | null
 }
 
 interface Props {
@@ -53,6 +54,25 @@ function weeksOverdue(iso: string) {
   monday.setHours(0, 0, 0, 0)
   monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7))
   return Math.round((monday.getTime() - new Date(iso).getTime()) / (7 * 24 * 60 * 60 * 1000))
+}
+
+function HappinessCell({ score }: { score: Row['latest_score'] }) {
+  if (!score) return <span className="text-muted-foreground text-xs">Not scored</span>
+
+  const variant = score.score >= 7 ? 'default' : score.score >= 4 ? 'secondary' : 'destructive'
+  const riskClass = score.churn_risk === 'high' ? 'text-destructive font-medium' : 'text-muted-foreground'
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="inline-flex items-center gap-1.5">
+        <Badge variant={variant}>{score.score.toFixed(1)} / 10</Badge>
+        {score.source === 'account_manager' && (
+          <span className="text-xs text-muted-foreground" title="Assessed by the account manager">AM</span>
+        )}
+      </span>
+      <span className={`text-xs capitalize ${riskClass}`}>{score.churn_risk} risk</span>
+    </div>
+  )
 }
 
 function StatusBadge({ status, dueAt }: { status: Status; dueAt: string }) {
@@ -207,6 +227,7 @@ export default function ScheduleIndex({
                   <TableRow>
                     <TableHead>Customer</TableHead>
                     <TableHead>Account manager</TableHead>
+                    <TableHead>Happiness</TableHead>
                     <TableHead>Frequency</TableHead>
                     <TableHead>Last contacted</TableHead>
                     <TableHead>Due week</TableHead>
@@ -227,6 +248,9 @@ export default function ScheduleIndex({
                       </TableCell>
                       <TableCell>
                         <AccountManagerControl clientId={row.id} current={row.account_manager} users={users} />
+                      </TableCell>
+                      <TableCell>
+                        <HappinessCell score={row.latest_score} />
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {row.interval_months === 1 ? 'Monthly' : `Every ${row.interval_months} months`}

@@ -84,11 +84,16 @@ class ContactScheduleTest extends TestCase
         $notMine   = $this->client(['account_manager_id' => $other->id]);
         $lost      = $this->client(['account_manager_id' => $me->id, 'lost_at' => now()]);
 
+        $overdue->happinessScores()->create(['score' => 3, 'churn_risk' => 'high', 'analysis_summary' => 'AI', 'key_concerns' => [], 'recommended_actions' => [], 'scored_at' => now()->subDay()]);
+        $overdue->happinessScores()->create(['source' => 'account_manager', 'score' => 8, 'churn_risk' => 'low', 'analysis_summary' => 'Happy', 'key_concerns' => [], 'recommended_actions' => [], 'scored_at' => now()]);
+
         $this->actingAs($me)->get('/schedule')->assertInertia(fn(Assert $page) => $page
             ->component('Schedule/Index', false)
             ->has('rows', 1)
             ->where('rows.0.id', $overdue->id)
             ->where('rows.0.status', 'overdue')
+            ->where('rows.0.latest_score.score', 8)
+            ->where('rows.0.latest_score.source', 'account_manager')
             ->where('summary.scheduled', 2)
         );
     }

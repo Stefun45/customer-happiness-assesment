@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Client;
+use App\Models\HappinessScore;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -28,7 +29,14 @@ class ScheduleController extends Controller
             ->withMax('contactLogs', 'contacted_at')
             ->get(['id', 'name', 'company_name', 'is_enterprise', 'account_manager_id', 'first_contact_due_at']);
 
-        $rows = $clients->map(function (Client $client) {
+        // Current score per client: the most recent row (AI or account manager)
+        $scores = HappinessScore::query()
+            ->whereIn('id', fn($q) => $q->selectRaw('MAX(id)')->from('happiness_scores')->groupBy('client_id'))
+            ->get(['client_id', 'score', 'churn_risk', 'source'])
+            ->keyBy('client_id');
+
+        $rows = $clients->map(function (Client $client) use ($scores) {
+            $score = $scores->get($client->id);
             $last  = $client->contact_logs_max_contacted_at ? \Carbon\Carbon::parse($client->contact_logs_max_contacted_at) : null;
             $dueAt = $client->nextContactDueAt($last);
 
@@ -42,6 +50,11 @@ class ScheduleController extends Controller
                 'last_contacted_at'  => $last?->toDateString(),
                 'next_due_at'        => $dueAt->toDateString(),
                 'status'             => Client::contactStatus($dueAt),
+                'latest_score'       => $score ? [
+                    'score'      => $score->score,
+                    'churn_risk' => $score->churn_risk,
+                    'source'     => $score->source,
+                ] : null,
             ];
         });
 
