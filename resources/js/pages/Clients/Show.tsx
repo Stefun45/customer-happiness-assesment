@@ -196,7 +196,7 @@ export default function ClientShow({
   users = [],
 }: Props) {
   const { auth } = usePage<{ auth: { user: { id: number; role: string } | null } }>().props
-  const canDelete = (owner: UserOption | null) => auth.user?.role === 'admin' || owner?.id === auth.user?.id
+  const canDelete = (owner: UserOption | null) => ['super_admin', 'admin'].includes(auth.user?.role ?? '') || owner?.id === auth.user?.id
   const [completingContact, setCompletingContact] = React.useState(false)
   const [noteBody, setNoteBody] = React.useState('')
   const [savingNote, setSavingNote] = React.useState(false)

@@ -149,6 +149,27 @@ class ContactScheduleTest extends TestCase
         $this->assertSame('admin', $admin->fresh()->role, 'cannot change own role');
     }
 
+    public function test_super_admins_have_admin_permissions(): void
+    {
+        $super   = User::factory()->create(['role' => 'super_admin']);
+        $manager = User::factory()->create(['role' => 'account_manager']);
+        $client  = $this->client();
+
+        $this->actingAs($super)->get('/settings')->assertInertia(fn(Assert $page) => $page
+            ->component('Settings/Index', false)
+            ->where('can_manage_users', true)
+        );
+
+        $this->actingAs($super)->patch("/settings/users/{$manager->id}/role", ['role' => 'admin'])->assertRedirect();
+        $this->assertSame('admin', $manager->fresh()->role);
+
+        // Super admins can be assigned customers and can assign anyone
+        $this->actingAs($super)->patch("/clients/{$client->id}/account-manager", ['account_manager_id' => $super->id])->assertRedirect();
+        $this->assertSame($super->id, $client->fresh()->account_manager_id);
+        $this->actingAs($super)->patch("/clients/{$client->id}/account-manager", ['account_manager_id' => $manager->id])->assertRedirect();
+        $this->assertSame($manager->id, $client->fresh()->account_manager_id);
+    }
+
     public function test_completing_a_contact_links_only_this_clients_fireflies_calls(): void
     {
         $user   = User::factory()->create(['role' => 'viewer']);

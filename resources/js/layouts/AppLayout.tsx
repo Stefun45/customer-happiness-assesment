@@ -32,7 +32,7 @@ const navItems: NavItem[] = [
   { label: 'Schedule',       href: '/schedule',        icon: CalendarCheck },
   { label: 'Communications', href: '/communications',  icon: MessageSquare },
   { label: 'Invoices',       href: '/invoices',        icon: Receipt },
-  { label: 'Settings',       href: '/settings',        icon: Settings, roles: ['admin', 'account_manager'] },
+  { label: 'Settings',       href: '/settings',        icon: Settings, roles: ['super_admin', 'admin', 'account_manager'] },
 ]
 
 interface AuthUser {

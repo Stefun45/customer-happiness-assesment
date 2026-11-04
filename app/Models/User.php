@@ -19,13 +19,17 @@ class User extends Authenticatable
 
     // role => label
     public const ROLES = [
+        'super_admin'     => 'Super admin',
         'admin'           => 'Admin',
         'account_manager' => 'Account manager',
         'viewer'          => 'Viewer',
     ];
 
+    // Super admins currently have the same permissions as admins
+    public const ADMIN_ROLES = ['super_admin', 'admin'];
+
     // Roles that can be assigned customers as their account manager
-    public const ACCOUNT_MANAGER_ROLES = ['admin', 'account_manager'];
+    public const ACCOUNT_MANAGER_ROLES = ['super_admin', 'admin', 'account_manager'];
 
     protected function casts(): array
     {
@@ -37,7 +41,7 @@ class User extends Authenticatable
 
     public function isAdmin(): bool
     {
-        return $this->role === 'admin';
+        return in_array($this->role, self::ADMIN_ROLES, true);
     }
 
     public function canManageAccounts(): bool

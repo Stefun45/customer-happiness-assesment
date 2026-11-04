@@ -10,7 +10,7 @@ class EnsureAdmin
 {
     public function handle(Request $request, Closure $next): Response
     {
-        if (!$request->user() || $request->user()->role !== 'admin') {
+        if (!$request->user() || !$request->user()->isAdmin()) {
             return redirect('/dashboard')->with('error', 'You do not have permission to access that page.');
         }
 

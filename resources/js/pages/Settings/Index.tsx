@@ -48,7 +48,7 @@ interface Props {
 }
 
 function roleBadgeVariant(role: string): 'default' | 'secondary' | 'outline' {
-  if (role === 'admin') return 'default'
+  if (role === 'super_admin' || role === 'admin') return 'default'
   if (role === 'account_manager') return 'secondary'
   return 'outline'
 }

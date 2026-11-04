@@ -26,7 +26,7 @@ interface PageProps {
 export default function AccountManagerControl({ clientId, current, users }: Props) {
   const { auth } = usePage<PageProps>().props
   const me = auth.user
-  const isAdmin = me?.role === 'admin'
+  const isAdmin = me?.role === 'admin' || me?.role === 'super_admin'
 
   function assign(userId: number | null) {
     router.patch(
