@@ -19,6 +19,8 @@ interface User {
   name: string
   email: string
   role: string
+  // Whether the current user can change this user's role or remove them
+  manageable: boolean
   created_at: string
 }
 
@@ -45,6 +47,8 @@ interface Props {
   // Only admins can invite, remove or change the role of users
   can_manage_users: boolean
   roles: Record<string, string>
+  // Roles the current user can give; only super admins can make admins
+  assignable_roles: string[]
 }
 
 function roleBadgeVariant(role: string): 'default' | 'secondary' | 'outline' {
@@ -61,6 +65,7 @@ export default function SettingsIndex({
   current_user_id,
   can_manage_users,
   roles,
+  assignable_roles,
 }: Props) {
   const [confirmRemove, setConfirmRemove] = useState<number | null>(null)
   const [confirmCancel, setConfirmCancel] = useState<number | null>(null)
@@ -163,14 +168,14 @@ export default function SettingsIndex({
                       </TableCell>
                       <TableCell>{u.email}</TableCell>
                       <TableCell>
-                        {can_manage_users && u.id !== current_user_id ? (
+                        {u.manageable ? (
                           <select
                             value={u.role}
                             onChange={(e) => changeRole(u.id, e.target.value)}
                             className="h-9 rounded-md border border-input bg-background px-2 text-sm"
                           >
-                            {Object.entries(roles).map(([value, label]) => (
-                              <option key={value} value={value}>{label}</option>
+                            {assignable_roles.map((value) => (
+                              <option key={value} value={value}>{roles[value]}</option>
                             ))}
                           </select>
                         ) : (
@@ -181,7 +186,7 @@ export default function SettingsIndex({
                         {formatDate(u.created_at)}
                       </TableCell>
                       <TableCell className="text-right">
-                        {can_manage_users && u.id !== current_user_id && (
+                        {u.manageable && (
                           confirmRemove === u.id ? (
                             <div className="flex items-center justify-end gap-2">
                               <span className="text-sm text-muted-foreground">Remove?</span>
@@ -240,8 +245,8 @@ export default function SettingsIndex({
                     onChange={(e) => inviteForm.setData('role', e.target.value)}
                     className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    {Object.entries(roles).map(([value, label]) => (
-                      <option key={value} value={value}>{label}</option>
+                    {assignable_roles.map((value) => (
+                      <option key={value} value={value}>{roles[value]}</option>
                     ))}
                   </select>
                 </div>

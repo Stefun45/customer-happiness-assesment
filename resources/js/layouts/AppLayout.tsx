@@ -31,7 +31,7 @@ const navItems: NavItem[] = [
   { label: 'Clients',        href: '/clients',         icon: Users },
   { label: 'Schedule',       href: '/schedule',        icon: CalendarCheck },
   { label: 'Communications', href: '/communications',  icon: MessageSquare },
-  { label: 'Invoices',       href: '/invoices',        icon: Receipt },
+  { label: 'Invoices',       href: '/invoices',        icon: Receipt, roles: ['super_admin'] },
   { label: 'Settings',       href: '/settings',        icon: Settings, roles: ['super_admin', 'admin', 'account_manager'] },
 ]
 

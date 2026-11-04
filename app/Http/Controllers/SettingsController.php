@@ -24,6 +24,7 @@ class SettingsController extends Controller
             'name'       => $u->name,
             'email'      => $u->email,
             'role'       => $u->role,
+            'manageable' => $request->user()->canManageUser($u),
             'created_at' => $u->created_at->toISOString(),
         ]);
 
@@ -56,16 +57,18 @@ class SettingsController extends Controller
             'current_user_id'     => auth()->id(),
             'can_manage_users'    => $request->user()->isAdmin(),
             'roles'               => User::ROLES,
+            'assignable_roles'    => $request->user()->assignableRoles(),
         ]);
     }
 
     public function updateRole(Request $request, User $user): RedirectResponse
     {
-        $request->validate(['role' => ['required', Rule::in(array_keys(User::ROLES))]]);
-
         if ($user->id === auth()->id()) {
             return back()->with('error', 'You cannot change your own role.');
         }
+
+        abort_unless($request->user()->canManageUser($user), 403);
+        $request->validate(['role' => ['required', Rule::in($request->user()->assignableRoles())]]);
 
         $user->update(['role' => $request->input('role')]);
 
@@ -77,11 +80,13 @@ class SettingsController extends Controller
         return back()->with('success', "{$user->name} is now " . strtolower(User::ROLES[$user->role]) . '.');
     }
 
-    public function removeUser(User $user): RedirectResponse
+    public function removeUser(Request $request, User $user): RedirectResponse
     {
         if ($user->id === auth()->id()) {
             return back()->with('error', 'You cannot remove your own account.');
         }
+
+        abort_unless($request->user()->canManageUser($user), 403);
 
         $user->delete();
 

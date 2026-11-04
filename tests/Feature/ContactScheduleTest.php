@@ -170,6 +170,34 @@ class ContactScheduleTest extends TestCase
         $this->assertSame($manager->id, $client->fresh()->account_manager_id);
     }
 
+    public function test_only_super_admins_can_make_admins_or_see_invoices(): void
+    {
+        $super   = User::factory()->create(['role' => 'super_admin']);
+        $admin   = User::factory()->create(['role' => 'admin']);
+        $other   = User::factory()->create(['role' => 'admin']);
+        $manager = User::factory()->create(['role' => 'account_manager']);
+
+        $this->actingAs($admin)->get('/settings')->assertInertia(fn(Assert $page) => $page
+            ->where('assignable_roles', ['account_manager', 'viewer'])
+        );
+
+        // Admins can't promote to admin or super admin, invite them, or touch other admins
+        $this->actingAs($admin)->patch("/settings/users/{$manager->id}/role", ['role' => 'admin'])->assertSessionHasErrors('role');
+        $this->actingAs($admin)->patch("/settings/users/{$manager->id}/role", ['role' => 'super_admin'])->assertSessionHasErrors('role');
+        $this->assertSame('account_manager', $manager->fresh()->role);
+        $this->actingAs($admin)->post('/invitations', ['email' => 'new@example.com', 'role' => 'admin'])->assertSessionHasErrors('role');
+        $this->actingAs($admin)->patch("/settings/users/{$other->id}/role", ['role' => 'viewer'])->assertForbidden();
+        $this->actingAs($admin)->patch("/settings/users/{$super->id}/role", ['role' => 'viewer'])->assertForbidden();
+        $this->actingAs($admin)->delete("/settings/users/{$super->id}")->assertForbidden();
+        $this->assertSame('super_admin', $super->fresh()->role);
+
+        $this->actingAs($super)->patch("/settings/users/{$manager->id}/role", ['role' => 'super_admin'])->assertRedirect();
+        $this->assertSame('super_admin', $manager->fresh()->role);
+
+        $this->actingAs($admin)->get('/invoices')->assertRedirect('/dashboard');
+        $this->actingAs($super)->get('/invoices')->assertOk();
+    }
+
     public function test_completing_a_contact_links_only_this_clients_fireflies_calls(): void
     {
         $user   = User::factory()->create(['role' => 'viewer']);

@@ -44,6 +44,33 @@ class User extends Authenticatable
         return in_array($this->role, self::ADMIN_ROLES, true);
     }
 
+    public function isSuperAdmin(): bool
+    {
+        return $this->role === 'super_admin';
+    }
+
+    /**
+     * Roles this user can give others. Only super admins can make admins or
+     * super admins.
+     */
+    public function assignableRoles(): array
+    {
+        if ($this->isSuperAdmin()) return array_keys(self::ROLES);
+
+        return $this->isAdmin() ? ['account_manager', 'viewer'] : [];
+    }
+
+    /**
+     * Whether this user can change the role of, or remove, $other. Admins
+     * can't touch admins or super admins.
+     */
+    public function canManageUser(User $other): bool
+    {
+        if ($other->id === $this->id) return false;
+
+        return $this->isSuperAdmin() || ($this->isAdmin() && !$other->isAdmin());
+    }
+
     public function canManageAccounts(): bool
     {
         return in_array($this->role, self::ACCOUNT_MANAGER_ROLES, true);
