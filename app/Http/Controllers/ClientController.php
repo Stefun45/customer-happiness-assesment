@@ -93,9 +93,10 @@ class ClientController extends Controller
 
     public function show(Client $client): Response
     {
+        // Not raw_payload: Fireflies transcripts are large and it isn't shown
         $communications = $client->communications()
             ->orderByDesc('occurred_at')
-            ->get()
+            ->get(['id', 'source', 'subject', 'body', 'occurred_at', 'sentiment_score'])
             ->map(fn($c) => [
                 'id'              => $c->id,
                 'source'          => $c->source,

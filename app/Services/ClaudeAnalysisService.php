@@ -42,7 +42,7 @@ class ClaudeAnalysisService
                 });
             })
             ->orderBy('occurred_at', 'desc')
-            ->get();
+            ->get(['id', 'source', 'subject', 'body', 'occurred_at']);
 
         $outstandingInvoices = $client->invoices()
             ->whereNull('paid_at')
